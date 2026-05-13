@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0c1008">
+<title>VogelRadar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root {
+  --bg:#0c1008;--surface:#141c0e;--surface2:#1c2814;--border:#2a3d1e;
+  --accent:#7ecb35;--accent2:#c8f26a;--amber:#e8a234;--red:#d63b2f;
+  --text:#ddecc4;--muted:#6a8a4a;--faint:#3a5220;
+  --font-head:'Playfair Display',Georgia,serif;
+  --font-mono:'Space Mono',monospace;
+  --font-body:'DM Sans',sans-serif;
+  --radius:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-weight:300;min-height:100dvh;overflow:hidden}
+
+/* LOGIN */
+#login-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;z-index:9000}
+.login-logo{font-family:var(--font-head);font-size:2.2rem;font-weight:700;color:var(--accent2);margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.login-logo-icon{animation:soar 4s ease-in-out infinite;display:inline-block}
+@keyframes soar{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-5px) rotate(5deg)}}
+.login-sub{color:var(--muted);font-size:.85rem;margin-bottom:32px;text-align:center}
+.login-card{width:100%;max-width:360px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:26px 22px}
+.login-card label{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:5px;margin-top:14px}
+.login-card label:first-child{margin-top:0}
+.login-card input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 13px;color:var(--text);font-family:var(--font-body);font-size:.95rem;outline:none;transition:border .2s}
+.login-card input:focus{border-color:var(--accent)}
+.login-note{font-size:.7rem;color:var(--muted);margin-top:9px;line-height:1.5}
+.login-note a{color:var(--accent);text-decoration:none}
+.btn-login{margin-top:20px;width:100%;background:var(--accent);border:none;border-radius:8px;padding:13px;color:#0c1008;font-family:var(--font-mono);font-size:.83rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:opacity .2s}
+.btn-login:hover{opacity:.85}
+.btn-login:disabled{opacity:.4;cursor:default}
+#login-error{color:var(--red);font-size:.78rem;margin-top:10px;text-align:center;min-height:18px}
+.login-skip{margin-top:14px;font-size:.76rem;color:var(--muted);text-align:center;cursor:pointer;text-decoration:underline}
+.login-skip:hover{color:var(--text)}
+
+/* APP */
+#app{display:none;height:100dvh;flex-direction:column}
+#app.visible{display:flex}
+
+/* HEADER */
+header{display:flex;align-items:center;justify-content:space-between;padding:11px 15px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.logo{font-family:var(--font-head);font-size:1.25rem;font-weight:700;color:var(--accent2);display:flex;align-items:center;gap:7px}
+.logo-icon{font-size:1rem;animation:soar 4s ease-in-out infinite}
+.header-right{display:flex;align-items:center;gap:7px}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.status-dot.active{background:var(--accent);box-shadow:0 0 5px var(--accent)}
+.status-dot.loading{background:var(--amber);animation:pulse 1s infinite}
+.status-dot.error{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.status-label{font-family:var(--font-mono);font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn-icon{background:var(--surface2);border:1px solid var(--border);color:var(--text);width:31px;height:31px;border-radius:7px;cursor:pointer;font-size:.85rem;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
+.btn-icon:hover{border-color:var(--accent)}
+.btn-icon.manual-active{border-color:var(--amber);background:#221a06;animation:pulse 1.5s infinite}
+
+/* BANNER */
+#fallback-banner{background:#1a1706;border-bottom:1px solid #4a3a10;padding:8px 15px;display:none;align-items:center;justify-content:space-between;font-size:.78rem;color:var(--amber);gap:10px;flex-shrink:0}
+#fallback-banner button{background:none;border:none;color:var(--amber);cursor:pointer;font-size:.95rem;opacity:.6}
+
+/* MAP */
+#map{flex:1;min-height:0}
+
+/* LEAFLET POPUP */
+.leaflet-popup-content-wrapper{background:var(--surface2)!important;color:var(--text)!important;border:1px solid var(--border)!important;border-radius:var(--radius)!important;box-shadow:0 8px 32px rgba(0,0,0,.6)!important}
+.leaflet-popup-tip{background:var(--surface2)!important}
+.leaflet-popup-content{margin:11px 13px!important;font-family:var(--font-body)}
+.popup-soort{font-family:var(--font-head);font-size:.95rem;font-weight:700;color:var(--accent2);margin-bottom:2px}
+.popup-latin{font-size:.68rem;color:var(--muted);margin-bottom:3px;font-style:italic}
+.popup-datum{font-size:.72rem;color:var(--text);opacity:.7}
+.popup-aantal{font-family:var(--font-mono);font-size:.72rem;color:var(--amber);margin-top:2px}
+.popup-sep{border:none;border-top:1px solid var(--border);margin:7px 0}
+
+/* BOTTOM */
+#bottom{background:var(--surface);border-top:1px solid var(--border);padding:9px 15px 11px;flex-shrink:0}
+.bottom-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.stats-row{display:flex;gap:14px}
+.stat{display:flex;flex-direction:column}
+.stat-val{font-family:var(--font-mono);font-size:1.05rem;color:var(--accent2);font-weight:700;line-height:1}
+.stat-lbl{font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:2px}
+.btn-refresh{background:var(--surface2);border:1px solid var(--border);color:var(--accent);border-radius:var(--radius);padding:6px 11px;font-family:var(--font-mono);font-size:.68rem;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .2s;display:flex;align-items:center;gap:4px}
+.btn-refresh:hover{background:var(--faint);border-color:var(--accent)}
+.btn-refresh:disabled{opacity:.4;cursor:default}
+.radius-row{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.radius-row label{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;white-space:nowrap}
+#radius-slider{flex:1;accent-color:var(--accent);cursor:pointer}
+.radius-val{font-family:var(--font-mono);font-size:.7rem;color:var(--accent2);min-width:36px;text-align:right}
+.species-scroll{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.species-scroll::-webkit-scrollbar{display:none}
+.species-pill{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:.7rem;color:var(--text);white-space:nowrap;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px;flex-shrink:0}
+.species-pill:hover,.species-pill.highlight{background:var(--faint);border-color:var(--accent);color:var(--accent2)}
+.pill-count{font-family:var(--font-mono);font-size:.6rem;color:var(--amber)}
+.empty-state{text-align:center;padding:5px 0;color:var(--muted);font-size:.8rem}
+
+/* TOAST */
+#toast{position:fixed;bottom:155px;left:50%;transform:translateX(-50%) translateY(14px);background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 15px;border-radius:30px;font-size:.75rem;opacity:0;transition:all .3s;pointer-events:none;z-index:1000;white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* POS MARKER */
+.pos-pulse-ring{width:24px;height:24px;border:2px solid var(--accent);border-radius:50%;animation:ring-pulse 2s ease-out infinite}
+@keyframes ring-pulse{0%{transform:scale(.5);opacity:1}100%{transform:scale(2.2);opacity:0}}
+.pos-dot{width:10px;height:10px;background:var(--accent);border:2px solid #0c1008;border-radius:50%;box-shadow:0 0 6px var(--accent);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-logo"><span class="login-logo-icon">🪶</span> VogelRadar</div>
+  <div class="login-sub">Live vogelwaarnemingen via waarneming.nl</div>
+  <div class="login-card">
+    <label>E-mailadres of gebruikersnaam</label>
+    <input type="email" id="login-email" placeholder="jouw@email.nl" autocomplete="username" inputmode="email">
+    <label>Wachtwoord</label>
+    <input type="password" id="login-pw" placeholder="••••••••" autocomplete="current-password">
+    <div class="login-note">
+      Jouw inloggegevens van <a href="https://waarneming.nl" target="_blank">waarneming.nl</a>.<br>
+      Token wordt alleen lokaal opgeslagen in je browser.
+    </div>
+    <button class="btn-login" id="btn-login" onclick="doLogin()">Inloggen</button>
+    <div id="login-error"></div>
+  </div>
+  <div class="login-skip" onclick="showApp(true)">Verdergaan zonder account (beperkte demo)</div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header>
+    <div class="logo"><span class="logo-icon">🪶</span> VogelRadar</div>
+    <div class="header-right">
+      <button class="btn-icon" id="btn-manual" onclick="toggleManualMode()" title="Klik op kaart voor positie">📍</button>
+      <button class="btn-icon" onclick="doLogout()" title="Uitloggen">↩</button>
+      <div class="status-dot" id="status-dot"></div>
+      <span class="status-label" id="status-label">Wachten…</span>
+    </div>
+  </header>
+
+  <div id="fallback-banner">
+    <span>📍 Tik op de kaart om je positie in te stellen</span>
+    <button onclick="document.getElementById('fallback-banner').style.display='none'">✕</button>
+  </div>
+
+  <div id="map"></div>
+
+  <div id="bottom">
+    <div class="bottom-bar">
+      <div class="stats-row">
+        <div class="stat"><span class="stat-val" id="stat-soorten">—</span><span class="stat-lbl">Soorten</span></div>
+        <div class="stat"><span class="stat-val" id="stat-waarnemingen">—</span><span class="stat-lbl">Waarn.</span></div>
+        <div class="stat"><span class="stat-val" id="stat-km">5</span><span class="stat-lbl">Km</span></div>
+      </div>
+      <button class="btn-refresh" id="btn-refresh" onclick="refreshData()">
+        <span id="refresh-icon">↻</span> Vernieuwen
+      </button>
+    </div>
+    <div class="radius-row">
+      <label>Straal</label>
+      <input type="range" id="radius-slider" min="1" max="25" value="5" step="1" oninput="onRadiusChange(this.value)">
+      <span class="radius-val" id="radius-val">5 km</span>
+    </div>
+    <div class="species-scroll" id="species-scroll">
+      <div class="empty-state">Positie wordt bepaald…</div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const S={token:null,lat:null,lng:null,radius:5,days:3,observations:[],watching:null,lastFetch:null,manualMode:false,demoMode:false};
+let map,posMarker,radiusCircle,birdMarkers,mapReady=false;
+
+// ── INIT
+window.addEventListener('DOMContentLoaded',()=>{
+  const saved=localStorage.getItem('vr_token');
+  if(saved){S.token=saved;showApp(false)}
+  document.getElementById('login-pw').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
+  document.getElementById('login-email').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('login-pw').focus()});
+});
+
+// ── LOGIN
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pw=document.getElementById('login-pw').value;
+  const errEl=document.getElementById('login-error');
+  const btn=document.getElementById('btn-login');
+  if(!email||!pw){errEl.textContent='Vul e-mail en wachtwoord in.';return}
+  btn.disabled=true;btn.textContent='Bezig…';errEl.textContent='';
+  try{
+    const body=new URLSearchParams({client_id:'obs_app',grant_type:'password',email,password:pw});
+    const resp=await fetch('https://waarneming.nl/api/v1/oauth2/token/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
+    const data=await resp.json();
+    if(data.access_token){
+      S.token=data.access_token;
+      localStorage.setItem('vr_token',S.token);
+      if(data.refresh_token)localStorage.setItem('vr_refresh',data.refresh_token);
+      showApp(false);
+    } else {
+      errEl.textContent=data.error_description||'Inloggen mislukt. Controleer je gegevens.';
+    }
+  }catch(e){errEl.textContent='Verbinding mislukt. Check je internet.';console.error(e)}
+  btn.disabled=false;btn.textContent='Inloggen';
+}
+
+function doLogout(){
+  localStorage.removeItem('vr_token');localStorage.removeItem('vr_refresh');
+  S.token=null;S.observations=[];
+  if(S.watching)navigator.geolocation.clearWatch(S.watching);
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('login-pw').value='';
+  document.getElementById('login-error').textContent='';
+}
+
+function showApp(demoMode){
+  S.demoMode=demoMode;
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').classList.add('visible');
+  initMap();
+  startGPS();
+  if(demoMode)toast('Demo: GBIF data, mogelijk vertraagd');
+}
+
+// ── KAART
+function initMap(){
+  if(mapReady)return;mapReady=true;
+  map=L.map('map',{zoomControl:true}).setView([51.58,4.78],11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap | Data: waarneming.nl',maxZoom:19
+  }).addTo(map);
+  birdMarkers=L.layerGroup().addTo(map);
+}
+
+function birdIcon(n){
+  const color=n>5?'#e8a234':'#7ecb35',size=n>5?13:10;
+  return L.divIcon({className:'',html:`<div style="width:${size}px;height:${size}px;background:${color};border:2px solid #0c1008;border-radius:50%;box-shadow:0 0 5px ${color}66"></div>`,iconAnchor:[size/2,size/2]});
+}
+
+function setPosMarker(lat,lng){
+  if(posMarker)map.removeLayer(posMarker);
+  if(radiusCircle)map.removeLayer(radiusCircle);
+  posMarker=L.marker([lat,lng],{icon:L.divIcon({className:'',html:`<div style="position:relative;width:24px;height:24px"><div class="pos-pulse-ring"></div><div class="pos-dot"></div></div>`,iconAnchor:[12,12]})}).addTo(map);
+  radiusCircle=L.circle([lat,lng],{radius:S.radius*1000,color:'#7ecb35',fillColor:'#7ecb35',fillOpacity:.04,weight:1,dashArray:'4 6'}).addTo(map);
+}
+
+// ── GPS
+function startGPS(){
+  if(!navigator.geolocation){showFallback();return}
+  setStatus('GPS bepalen…','loading');
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      onPosUpdate(pos);
+      S.watching=navigator.geolocation.watchPosition(onPosUpdate,()=>{},{enableHighAccuracy:true,maximumAge:15000,timeout:30000});
+    },
+    err=>{console.warn('GPS:',err.code,err.message);showFallback()},
+    {enableHighAccuracy:true,timeout:12000,maximumAge:0}
+  );
+}
+
+function onPosUpdate(pos){
+  const{latitude:lat,longitude:lng}=pos.coords;
+  const isFirst=!S.lat;
+  const moved=isFirst||dist(lat,lng,S.lat,S.lng)>0.08;
+  S.lat=lat;S.lng=lng;S.manualMode=false;
+  setPosMarker(lat,lng);
+  if(isFirst)map.setView([lat,lng],13);
+  else if(moved)map.panTo([lat,lng]);
+  document.getElementById('fallback-banner').style.display='none';
+  document.getElementById('btn-manual').classList.remove('manual-active');
+  if(moved||!S.lastFetch)fetchBirds();
+}
+
+function showFallback(){
+  setStatus('Klik op kaart','error');
+  document.getElementById('fallback-banner').style.display='flex';
+  enableMapClick();
+}
+
+// ── HANDMATIGE POSITIE
+function toggleManualMode(){
+  S.manualMode=!S.manualMode;
+  document.getElementById('btn-manual').classList.toggle('manual-active',S.manualMode);
+  if(S.manualMode){enableMapClick();toast('Tik op de kaart om positie in te stellen')}
+  else disableMapClick();
+}
+function enableMapClick(){map.on('click',onMapClick);map.getContainer().style.cursor='crosshair'}
+function disableMapClick(){map.off('click',onMapClick);map.getContainer().style.cursor=''}
+function onMapClick(e){
+  S.lat=e.latlng.lat;S.lng=e.latlng.lng;
+  setPosMarker(S.lat,S.lng);
+  map.setView([S.lat,S.lng],13);
+  disableMapClick();
+  S.manualMode=false;
+  document.getElementById('btn-manual').classList.remove('manual-active');
+  document.getElementById('fallback-banner').style.display='none';
+  fetchBirds();toast('Positie ingesteld — vogels laden…');
+}
+
+// ── DATA
+async function fetchBirds(){
+  if(!S.lat)return;
+  setStatus('Laden…','loading');setBusy(true);
+  if(S.demoMode||!S.token)await fetchGBIF();
+  else await fetchWaarneming();
+  setBusy(false);
+}
+
+async function fetchWaarneming(){
+  const today=new Date().toISOString().slice(0,10);
+  const url=new URL('https://waarneming.nl/api/v1/observations/around-point/');
+  url.searchParams.set('lat',S.lat);url.searchParams.set('lng',S.lng);
+  url.searchParams.set('days',S.days);url.searchParams.set('end_date',today);
+  url.searchParams.set('species_group','1');url.searchParams.set('limit','200');
+  try{
+    const resp=await fetch(url.toString(),{headers:{'Authorization':`Bearer ${S.token}`,'Accept-Language':'nl'}});
+    if(resp.status===401){const ok=await refreshToken();if(ok)return fetchWaarneming();doLogout();return}
+    if(!resp.ok)throw new Error(`HTTP ${resp.status}`);
+    const data=await resp.json();
+    S.observations=data.results||[];
+    S.lastFetch=Date.now();
+    render();
+    const n=new Set(S.observations.map(o=>o.species_detail?.id)).size;
+    setStatus(`${n} soorten`,'active');
+  }catch(e){setStatus('Fout bij laden','error');toast('Laden mislukt');console.error(e)}
+}
+
+async function fetchGBIF(){
+  const today=new Date(),past=new Date(today);past.setDate(today.getDate()-14);
+  const url=new URL('https://api.gbif.org/v1/occurrence/search');
+  url.searchParams.set('classKey','212');url.searchParams.set('hasCoordinate','true');
+  url.searchParams.set('hasGeospatialIssue','false');
+  url.searchParams.set('decimalLatitude',`${S.lat-kmToDeg(S.radius)},${S.lat+kmToDeg(S.radius)}`);
+  url.searchParams.set('decimalLongitude',`${S.lng-kmToDeg(S.radius)},${S.lng+kmToDeg(S.radius)}`);
+  url.searchParams.set('eventDate',`${past.toISOString().slice(0,10)},${today.toISOString().slice(0,10)}`);
+  url.searchParams.set('country','NL');url.searchParams.set('limit','200');
+  try{
+    const resp=await fetch(url.toString());
+    if(!resp.ok)throw new Error(`HTTP ${resp.status}`);
+    const data=await resp.json();
+    S.observations=(data.results||[])
+      .filter(o=>o.decimalLatitude&&o.decimalLongitude&&dist(S.lat,S.lng,o.decimalLatitude,o.decimalLongitude)<=S.radius)
+      .map(o=>({_gbif:true,id:o.key,date:o.eventDate?.slice(0,10)||'?',number:o.individualCount||1,
+        point:{type:'Point',coordinates:[o.decimalLongitude,o.decimalLatitude]},
+        species_detail:{id:o.speciesKey,name:o.vernacularName||o.species||o.scientificName||'Onbekend',scientific_name:o.scientificName||''}}));
+    S.lastFetch=Date.now();
+    render();
+    const n=new Set(S.observations.map(o=>o.species_detail?.id)).size;
+    setStatus(`${n} soorten (demo)`,'active');
+  }catch(e){setStatus('Fout','error');toast('Demo data niet beschikbaar');console.error(e)}
+}
+
+async function refreshToken(){
+  const r=localStorage.getItem('vr_refresh');if(!r)return false;
+  try{
+    const body=new URLSearchParams({client_id:'obs_app',grant_type:'refresh_token',refresh_token:r});
+    const resp=await fetch('https://waarneming.nl/api/v1/oauth2/token/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
+    const data=await resp.json();
+    if(data.access_token){S.token=data.access_token;localStorage.setItem('vr_token',S.token);if(data.refresh_token)localStorage.setItem('vr_refresh',data.refresh_token);return true}
+  }catch(e){}
+  return false;
+}
+
+// ── RENDER
+function render(){
+  birdMarkers.clearLayers();
+  const byPos={};
+  S.observations.forEach(o=>{
+    const c=o.point?.coordinates;if(!c)return;
+    const key=`${parseFloat(c[1]).toFixed(4)},${parseFloat(c[0]).toFixed(4)}`;
+    if(!byPos[key])byPos[key]=[];byPos[key].push(o);
+  });
+  Object.entries(byPos).forEach(([key,obs])=>{
+    const[lat,lng]=key.split(',').map(Number);
+    const marker=L.marker([lat,lng],{icon:birdIcon(obs[0].number||1)});
+    let html='';
+    obs.slice(0,4).forEach((o,i)=>{
+      const naam=o.species_detail?.name||'Onbekend';
+      const latin=o.species_detail?.scientific_name||'';
+      const datum=o.date||'?';
+      const n=o.number>1?`${o.number}×`:'';
+      if(i>0)html+='<hr class="popup-sep">';
+      html+=`<div class="popup-soort">${naam}</div>${latin?`<div class="popup-latin">${latin}</div>`:''}<div class="popup-datum">📅 ${datum}</div>${n?`<div class="popup-aantal">${n}</div>`:''}`;
+    });
+    if(obs.length>4)html+=`<hr class="popup-sep"><div class="popup-latin">+${obs.length-4} meer hier</div>`;
+    marker.bindPopup(html,{maxWidth:230});
+    birdMarkers.addLayer(marker);
+  });
+
+  // Soorten lijst
+  const counts={};
+  S.observations.forEach(o=>{const n=o.species_detail?.name||'Onbekend';counts[n]=(counts[n]||0)+(o.number||1)});
+  const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const container=document.getElementById('species-scroll');
+  container.innerHTML=sorted.length
+    ?sorted.map(([naam,n])=>`<div class="species-pill" onclick="zoomTo('${naam.replace(/'/g,"\\'")}')">${naam}<span class="pill-count">${n}</span></div>`).join('')
+    :'<div class="empty-state">Geen vogels gevonden in dit gebied</div>';
+
+  const soorten=new Set(S.observations.map(o=>o.species_detail?.id)).size;
+  document.getElementById('stat-soorten').textContent=soorten;
+  document.getElementById('stat-waarnemingen').textContent=S.observations.length;
+  document.getElementById('stat-km').textContent=S.radius;
+}
+
+function zoomTo(naam){
+  const o=S.observations.find(o=>(o.species_detail?.name||'Onbekend')===naam);
+  if(!o?.point?.coordinates)return;
+  const[lng,lat]=o.point.coordinates;
+  map.flyTo([lat,lng],14,{duration:1.2});
+  document.querySelectorAll('.species-pill').forEach(p=>p.classList.toggle('highlight',p.textContent.trim().startsWith(naam)));
+}
+
+// ── CONTROLS
+function onRadiusChange(val){
+  S.radius=parseInt(val);
+  document.getElementById('radius-val').textContent=`${val} km`;
+  document.getElementById('stat-km').textContent=val;
+  if(radiusCircle)radiusCircle.setRadius(S.radius*1000);
+}
+function refreshData(){if(S.lat)fetchBirds();else toast('Wacht op GPS…')}
+
+// ── HELPERS
+function dist(lat1,lng1,lat2,lng2){
+  const R=6371,dLat=rad(lat2-lat1),dLng=rad(lng2-lng1);
+  const a=Math.sin(dLat/2)**2+Math.cos(rad(lat1))*Math.cos(rad(lat2))*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function rad(d){return d*Math.PI/180}
+function kmToDeg(km){return km/111}
+function setStatus(label,state){document.getElementById('status-label').textContent=label;document.getElementById('status-dot').className='status-dot '+(state||'')}
+function setBusy(b){document.getElementById('btn-refresh').disabled=b;document.getElementById('refresh-icon').textContent=b?'⟳':'↻'}
+function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),3000)}
+
+setInterval(()=>{if(S.lat&&!S.manualMode)fetchBirds()},5*60*1000);
+</script>
+</body>
+</html>
