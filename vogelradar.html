@@ -131,6 +131,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
   <header>
     <div class="logo"><span class="logo-icon">🪶</span> VogelRadar</div>
     <div class="header-right">
+      <button class="btn-icon" id="btn-info" onclick="toggleInfo()" title="Broninfo">ℹ</button>
       <button class="btn-icon" id="btn-manual" onclick="toggleManualMode()" title="Klik op kaart voor positie">📍</button>
       <div class="status-dot" id="status-dot"></div>
       <span class="status-label" id="status-label">Wachten…</span>
@@ -140,6 +141,20 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
   <div id="fallback-banner">
     <span>📍 Tik op de kaart om je positie in te stellen</span>
     <button onclick="document.getElementById('fallback-banner').style.display='none'">✕</button>
+  </div>
+
+  <!-- INFO POPUP -->
+  <div id="info-popup" style="display:none;position:absolute;top:50px;right:12px;z-index:800;width:260px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 32px rgba(0,0,0,.6);padding:16px">
+    <div style="font-family:var(--font-head);font-size:1rem;font-weight:700;color:var(--accent2);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+      Databronnen
+      <button onclick="toggleInfo()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem">✕</button>
+    </div>
+    <div id="info-content">
+      <div style="color:var(--muted);font-size:.8rem">Nog geen data geladen…</div>
+    </div>
+    <div style="margin-top:12px;font-size:.68rem;color:var(--muted);border-top:1px solid var(--border);padding-top:8px">
+      Laatste refresh: <span id="info-timestamp">—</span>
+    </div>
   </div>
 
   <div id="map"></div>
@@ -169,7 +184,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
 <div id="toast"></div>
 
 <script>
-const S={token:null,lat:null,lng:null,radius:5,days:3,observations:[],watching:null,lastFetch:null,manualMode:false,demoMode:false};
+const S={token:null,lat:null,lng:null,radius:5,days:3,observations:[],watching:null,lastFetch:null,manualMode:false,demoMode:false,bronnen:{}};
 let map,posMarker,radiusCircle,birdMarkers,mapReady=false;
 
 // ── INIT
@@ -400,11 +415,11 @@ async function fetchGBIF(){
   S.lastFetch=Date.now();
   render();
   const n=new Set(S.observations.map(o=>o.species_detail?.id)).size;
-  const bronnen=[];
-  if(gbif.length>0) bronnen.push(`GBIF:${gbif.length}`);
-  if(inat.length>0) bronnen.push(`iNat:${inat.length}`);
   setStatus(`${n} soorten`,'active');
-  toast(`${S.observations.length} waarnemingen (14 dagen) — ${bronnen.join(' + ')}`);
+  const totaal=S.observations.length;
+  toast(`${totaal} waarnemingen · ${n} soorten`);
+  // Info popup bijwerken als die open is
+  if(document.getElementById('info-popup').style.display!=='none') updateInfoPopup();
 }
 
 async function fetchGBIFData(dateFrom, dateTo){
@@ -420,7 +435,7 @@ async function fetchGBIFData(dateFrom, dateTo){
   const resp=await fetch(url.toString());
   if(!resp.ok) throw new Error(`GBIF HTTP ${resp.status}`);
   const data=await resp.json();
-  return (data.results||[])
+  const results=(data.results||[])
     .filter(o=>o.decimalLatitude&&o.decimalLongitude&&dist(S.lat,S.lng,o.decimalLatitude,o.decimalLongitude)<=S.radius)
     .map(o=>({
       _src:'gbif',id:'g'+o.key,
@@ -433,9 +448,12 @@ async function fetchGBIFData(dateFrom, dateTo){
         scientific_name:o.scientificName||''
       }
     }));
+  S.bronnen.gbif={waarnemingen:results.length,soorten:new Set(results.map(o=>o.species_detail?.id)).size,fout:false};
+  return results;
 }
 
 async function fetchiNatData(dateFrom, dateTo){
+  S.bronnen.inat=null; // reset
   // iNaturalist open API — geen authenticatie nodig, recente data
   const url=new URL('https://api.inaturalist.org/v1/observations');
   url.searchParams.set('taxon_id','3');          // Aves taxon id in iNaturalist
@@ -451,7 +469,7 @@ async function fetchiNatData(dateFrom, dateTo){
   const resp=await fetch(url.toString());
   if(!resp.ok) throw new Error(`iNat HTTP ${resp.status}`);
   const data=await resp.json();
-  return (data.results||[])
+  const results=(data.results||[])
     .filter(o=>o.location)
     .map(o=>{
       const[lat,lng]=o.location.split(',').map(Number);
@@ -470,6 +488,8 @@ async function fetchiNatData(dateFrom, dateTo){
         }
       };
     });
+  S.bronnen.inat={waarnemingen:results.length,soorten:new Set(results.map(o=>o.species_detail?.id)).size,fout:false};
+  return results;
 }
 
 async function refreshToken(){
@@ -552,6 +572,55 @@ function kmToDeg(km){return km/111}
 function setStatus(label,state){document.getElementById('status-label').textContent=label;document.getElementById('status-dot').className='status-dot '+(state||'')}
 function setBusy(b){document.getElementById('btn-refresh').disabled=b;document.getElementById('refresh-icon').textContent=b?'⟳':'↻'}
 function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),3000)}
+
+function toggleInfo(){
+  const p=document.getElementById('info-popup');
+  const isOpen=p.style.display!=='none';
+  p.style.display=isOpen?'none':'block';
+  if(!isOpen) updateInfoPopup();
+}
+
+function updateInfoPopup(){
+  const el=document.getElementById('info-content');
+  const ts=document.getElementById('info-timestamp');
+  const b=S.bronnen;
+
+  if(!S.lastFetch){
+    el.innerHTML='<div style="color:var(--muted);font-size:.8rem">Nog geen data geladen…</div>';
+    return;
+  }
+
+  let html='';
+  const bronLijst=[
+    {key:'gbif', label:'GBIF', url:'https://gbif.org', kleur:'var(--accent)'},
+    {key:'inat', label:'iNaturalist', url:'https://inaturalist.org', kleur:'#74ac00'}
+  ];
+
+  bronLijst.forEach(b2=>{
+    const info=b[b2.key];
+    if(!info) return; // bron niet bevraagd of geen resultaat
+    const soorten=info.soorten||0;
+    const waarn=info.waarnemingen||0;
+    const status=info.fout?'❌ Fout bij laden':waarn===0?'Geen waarnemingen':'✓';
+    html+=`<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-family:var(--font-mono);font-size:.75rem;color:${b2.kleur};font-weight:700">${b2.label}</span>
+        <span style="font-size:.68rem;color:var(--muted)">${status}</span>
+      </div>
+      ${!info.fout&&waarn>0?`<div style="font-size:.78rem;color:var(--text)">${waarn} waarnemingen &nbsp;·&nbsp; <span style="color:var(--accent2)">${soorten} soorten</span></div>`:''}
+    </div>`;
+  });
+
+  // Totaal
+  const totWaarn=S.observations.length;
+  const totSoorten=new Set(S.observations.map(o=>o.species_detail?.id)).size;
+  html+=`<div style="font-family:var(--font-mono);font-size:.78rem;color:var(--accent2)">
+    Totaal: ${totWaarn} waarnemingen · ${totSoorten} soorten
+  </div>`;
+
+  el.innerHTML=html||'<div style="color:var(--muted);font-size:.8rem">Geen brondata beschikbaar</div>';
+  ts.textContent=S.lastFetch?new Date(S.lastFetch).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'—';
+}
 
 setInterval(()=>{if(S.lat&&!S.manualMode)fetchBirds()},5*60*1000);
 </script>
