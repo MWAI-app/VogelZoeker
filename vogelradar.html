@@ -184,7 +184,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
 <div id="toast"></div>
 
 <script>
-const S={token:null,lat:null,lng:null,radius:5,days:3,observations:[],watching:null,lastFetch:null,manualMode:false,demoMode:false,bronnen:{}};
+const S={token:null,lat:null,lng:null,radius:5,days:3,observations:[],watching:null,lastFetch:null,manualMode:false,demoMode:false,bronnen:{},selectedSpecies:null};
 let map,posMarker,radiusCircle,birdMarkers,mapReady=false;
 
 // ── INIT
@@ -288,14 +288,16 @@ function initMap(){
   if(mapReady)return;mapReady=true;
   map=L.map('map',{zoomControl:true}).setView([51.58,4.78],11);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    attribution:'© OpenStreetMap | Data: waarneming.nl',maxZoom:19
+    attribution:'© OpenStreetMap | Data: GBIF & iNaturalist',maxZoom:19
   }).addTo(map);
   birdMarkers=L.layerGroup().addTo(map);
 }
 
-function birdIcon(n){
-  const color=n>5?'#e8a234':'#7ecb35',size=n>5?13:10;
-  return L.divIcon({className:'',html:`<div style="width:${size}px;height:${size}px;background:${color};border:2px solid #0c1008;border-radius:50%;box-shadow:0 0 5px ${color}66"></div>`,iconAnchor:[size/2,size/2]});
+function birdIcon(n, selected){
+  const color=selected?'#4da6ff':n>5?'#e8a234':'#7ecb35';
+  const size=selected?14:n>5?13:10;
+  const glow=selected?'0 0 8px #4da6ff99':n>5?`0 0 5px ${color}66`:`0 0 5px ${color}66`;
+  return L.divIcon({className:'',html:`<div style="width:${size}px;height:${size}px;background:${color};border:2px solid #0c1008;border-radius:50%;box-shadow:${glow}"></div>`,iconAnchor:[size/2,size/2]});
 }
 
 function setPosMarker(lat,lng){
@@ -387,7 +389,7 @@ async function fetchWaarneming(){
 }
 
 async function fetchGBIF(){
-  const today=new Date(),past=new Date(today);past.setDate(today.getDate()-14);
+  const today=new Date(),past=new Date(today);past.setDate(today.getDate()-21); // GBIF: 21 dagen ivm vertraging
   const dateFrom=past.toISOString().slice(0,10);
   const dateTo=today.toISOString().slice(0,10);
 
@@ -412,6 +414,7 @@ async function fetchGBIF(){
     return true;
   });
 
+  S.selectedSpecies=null;
   S.lastFetch=Date.now();
   render();
   const n=new Set(S.observations.map(o=>o.species_detail?.id)).size;
@@ -514,7 +517,8 @@ function render(){
   });
   Object.entries(byPos).forEach(([key,obs])=>{
     const[lat,lng]=key.split(',').map(Number);
-    const marker=L.marker([lat,lng],{icon:birdIcon(obs[0].number||1)});
+    const isSelected=S.selectedSpecies&&obs.some(o=>(o.species_detail?.name||'Onbekend')===S.selectedSpecies);
+    const marker=L.marker([lat,lng],{icon:birdIcon(obs[0].number||1, isSelected),zIndexOffset:isSelected?1000:0});
     let html='';
     obs.slice(0,4).forEach((o,i)=>{
       const naam=o.species_detail?.name||'Onbekend';
@@ -545,11 +549,20 @@ function render(){
 }
 
 function zoomTo(naam){
+  // Deselect als zelfde soort opnieuw getikt
+  if(S.selectedSpecies===naam){
+    S.selectedSpecies=null;
+    document.querySelectorAll('.species-pill').forEach(p=>p.classList.remove('highlight'));
+    renderMarkers();
+    return;
+  }
+  S.selectedSpecies=naam;
   const o=S.observations.find(o=>(o.species_detail?.name||'Onbekend')===naam);
   if(!o?.point?.coordinates)return;
   const[lng,lat]=o.point.coordinates;
   map.flyTo([lat,lng],14,{duration:1.2});
   document.querySelectorAll('.species-pill').forEach(p=>p.classList.toggle('highlight',p.textContent.trim().startsWith(naam)));
+  renderMarkers(); // Herrender met blauwe stippen voor geselecteerde soort
 }
 
 // ── CONTROLS
