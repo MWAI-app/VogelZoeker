@@ -447,12 +447,190 @@ async function fetchGBIFData(dateFrom, dateTo){
       point:{type:'Point',coordinates:[o.decimalLongitude,o.decimalLatitude]},
       species_detail:{
         id:'g'+o.speciesKey,
-        name:o.vernacularName||o.species||o.scientificName||'Onbekend',
+        name:getNLNaam(o.scientificName||o.species, o.vernacularName),
         scientific_name:o.scientificName||''
       }
     }));
   S.bronnen.gbif={waarnemingen:results.length,soorten:new Set(results.map(o=>o.species_detail?.id)).size,fout:false};
   return results;
+}
+
+// ── NEDERLANDSE VOGELNAMEN FALLBACK TABEL ─────────────────────────────────
+// Wetenschappelijke naam → Nederlandse naam (top ~250 Europese soorten)
+const NL_NAMEN = {
+  // Roofvogels
+  "Milvus milvus":"Rode Wouw","Milvus migrans":"Zwarte Wouw",
+  "Buteo buteo":"Buizerd","Buteo lagopus":"Ruigpootbuizerd",
+  "Accipiter nisus":"Sperwer","Accipiter gentilis":"Havik",
+  "Circus aeruginosus":"Bruine Kiekendief","Circus cyaneus":"Blauwe Kiekendief",
+  "Circus pygargus":"Grauwe Kiekendief","Falco tinnunculus":"Torenvalk",
+  "Falco subbuteo":"Boomvalk","Falco peregrinus":"Slechtvalk",
+  "Falco columbarius":"Smelleken","Pandion haliaetus":"Visarend",
+  "Haliaeetus albicilla":"Zeearend","Aquila chrysaetos":"Steenarend",
+  "Pernis apivorus":"Wespendief","Circus macrourus":"Steppekiekendief",
+  // Uilen
+  "Tyto alba":"Kerkuil","Strix aluco":"Bosuil","Strix uralensis":"Oeraluil",
+  "Asio otus":"Ransuil","Asio flammeus":"Velduil",
+  "Bubo bubo":"Oehoe","Athene noctua":"Steenuil",
+  "Glaucidium passerinum":"Dwerguil","Aegolius funereus":"Ruigpootuil",
+  // Uilen NL
+  "Otus scops":"Dwergooruil",
+  // Spechten
+  "Dendrocopos major":"Grote Bonte Specht","Dendrocopos minor":"Kleine Bonte Specht",
+  "Dendrocopos medius":"Middelste Bonte Specht","Dryocopus martius":"Zwarte Specht",
+  "Picus viridis":"Groene Specht","Picus canus":"Grijskopspecht",
+  "Picoides tridactylus":"Drieteenspecht","Jynx torquilla":"Draaihals",
+  // Zangvogels A
+  "Erithacus rubecula":"Roodborst","Luscinia megarhynchos":"Nachtegaal",
+  "Luscinia svecica":"Blauwborst","Phoenicurus ochruros":"Zwarte Roodstaart",
+  "Phoenicurus phoenicurus":"Gekraagde Roodstaart","Saxicola rubetra":"Paapje",
+  "Saxicola rubicola":"Roodborsttapuit","Oenanthe oenanthe":"Tapuit",
+  "Turdus merula":"Merel","Turdus pilaris":"Kramsvogel",
+  "Turdus philomelos":"Zanglijster","Turdus iliacus":"Koperwiek",
+  "Turdus viscivorus":"Grote Lijster","Turdus torquatus":"Beflijster",
+  // Zangvogels B
+  "Sylvia atricapilla":"Zwartkop","Sylvia borin":"Tuinfluiter",
+  "Sylvia communis":"Grasmus","Sylvia curruca":"Braamsluiper",
+  "Sylvia nisoria":"Sperwergrasmus","Sylvia melanocephala":"Kleine Zwartkop",
+  "Phylloscopus trochilus":"Fitis","Phylloscopus collybita":"Tjiftjaf",
+  "Phylloscopus sibilatrix":"Fluiter","Phylloscopus trochiloides":"Groenloofzanger",
+  "Regulus regulus":"Goudhaan","Regulus ignicapilla":"Vuurgoudhaan",
+  "Acrocephalus scirpaceus":"Kleine Karekiet","Acrocephalus palustris":"Bosrietzanger",
+  "Acrocephalus arundinaceus":"Grote Karekiet","Acrocephalus schoenobaenus":"Rietzanger",
+  "Locustella naevia":"Sprinkhaanzanger","Locustella fluviatilis":"Krekelzanger",
+  "Hippolais icterina":"Spotvogel","Hippolais polyglotta":"Orpheusspotvogel",
+  "Iduna opaca":"Vale Spotvogel",
+  // Mezen
+  "Parus major":"Koolmees","Cyanistes caeruleus":"Pimpelmees",
+  "Periparus ater":"Zwarte Mees","Lophophanes cristatus":"Kuifmees",
+  "Poecile palustris":"Glanskop","Poecile montanus":"Matkop",
+  "Aegithalos caudatus":"Staartmees","Remiz pendulinus":"Buidelmees",
+  // Vinken
+  "Fringilla coelebs":"Vink","Fringilla montifringilla":"Keep",
+  "Carduelis carduelis":"Putter","Carduelis chloris":"Groenling",
+  "Spinus spinus":"Sijs","Linaria cannabina":"Kneu",
+  "Linaria flavirostris":"Frater","Acanthis flammea":"Barmsijs",
+  "Acanthis cabaret":"Kleine Barmsijs","Loxia curvirostra":"Kruisbek",
+  "Loxia leucoptera":"Witbandkruisbek","Pyrrhula pyrrhula":"Goudvink",
+  "Coccothraustes coccothraustes":"Appelvink","Emberiza citrinella":"Geelgors",
+  "Emberiza schoeniclus":"Rietgors","Emberiza calandra":"Grauwe Gors",
+  "Emberiza hortulana":"Ortolaan","Miliaria calandra":"Grauwe Gors",
+  "Serinus serinus":"Europese Kanarie","Chloris chloris":"Groenling",
+  // Mussen, spreeuwen, kraaien
+  "Passer domesticus":"Huismus","Passer montanus":"Ringmus",
+  "Sturnus vulgaris":"Spreeuw","Pastor roseus":"Roze Spreeuw",
+  "Corvus corax":"Raaf","Corvus corone":"Zwarte Kraai",
+  "Corvus cornix":"Bonte Kraai","Corvus frugilegus":"Roek",
+  "Corvus monedula":"Kauw","Pica pica":"Ekster",
+  "Garrulus glandarius":"Vlaamse Gaai","Nucifraga caryocatactes":"Notenkraker",
+  "Pyrrhocorax pyrrhocorax":"Alpenkraai",
+  // Zwaluwen, gierzwaluwen
+  "Hirundo rustica":"Boerenzwaluw","Delichon urbicum":"Huiszwaluw",
+  "Riparia riparia":"Oeverzwaluw","Cecropis daurica":"Roodstuitzwaluw",
+  "Apus apus":"Gierzwaluw","Apus melba":"Alpengierzwaluw",
+  // Leeuweriken, piepers, kwikstaarten
+  "Alauda arvensis":"Veldleeuwerik","Lullula arborea":"Boomleeuwerik",
+  "Galerida cristata":"Kuifleeuwerik","Eremophila alpestris":"Strandleeuwerik",
+  "Anthus trivialis":"Boompieper","Anthus pratensis":"Graspieper",
+  "Anthus spinoletta":"Waterpieper","Anthus campestris":"Duinpieper",
+  "Anthus cervinus":"Roodkeelpieper","Motacilla alba":"Witte Kwikstaart",
+  "Motacilla flava":"Gele Kwikstaart","Motacilla cinerea":"Grote Gele Kwikstaart",
+  // Lijsterachtigen extra
+  "Cinclus cinclus":"Waterspreeuw","Troglodytes troglodytes":"Winterkoning",
+  "Prunella modularis":"Heggenmus","Prunella collaris":"Alpensneeuwvink",
+  // Boomklevers, boomkruipers
+  "Sitta europaea":"Boomklever","Certhia familiaris":"Boomkruiper",
+  "Certhia brachydactyla":"Kortteenboomkruiper","Tichodroma muraria":"Rotskruiper",
+  // IJsvogels, bijeneter, hop, nachtzwaluw
+  "Alcedo atthis":"IJsvogel","Merops apiaster":"Bijeneter",
+  "Upupa epops":"Hop","Coracias garrulus":"Scharrelaar",
+  "Caprimulgus europaeus":"Nachtzwaluw",
+  // Duiven, tortelduiven
+  "Columba palumbus":"Houtduif","Columba livia":"Rotsduif",
+  "Columba oenas":"Holenduif","Streptopelia turtur":"Zomertortel",
+  "Streptopelia decaocto":"Turkse Tortel",
+  // Reigers, ooievaars, lepelaar
+  "Ardea cinerea":"Blauwe Reiger","Ardea purpurea":"Purperreiger",
+  "Egretta garzetta":"Kleine Zilverreiger","Egretta alba":"Grote Zilverreiger",
+  "Ardea alba":"Grote Zilverreiger","Bubulcus ibis":"Koereiger",
+  "Nycticorax nycticorax":"Kwak","Ixobrychus minutus":"Woudaap",
+  "Botaurus stellaris":"Roerdomp","Ciconia ciconia":"Ooievaar",
+  "Ciconia nigra":"Zwarte Ooievaar","Platalea leucorodia":"Lepelaar",
+  "Plegadis falcinellus":"Zwarte Ibis",
+  // Steltlopers
+  "Vanellus vanellus":"Kievit","Pluvialis apricaria":"Goudplevier",
+  "Pluvialis squatarola":"Zilverplevier","Charadrius dubius":"Kleine Plevier",
+  "Charadrius hiaticula":"Bontbekplevier","Charadrius alexandrinus":"Strandplevier",
+  "Tringa totanus":"Tureluur","Tringa nebularia":"Groenpootruiter",
+  "Tringa ochropus":"Witgat","Tringa glareola":"Bosruiter",
+  "Actitis hypoleucos":"Oeverloper","Gallinago gallinago":"Watersnip",
+  "Scolopax rusticola":"Houtsnip","Numenius arquata":"Wulp",
+  "Numenius phaeopus":"Regenwulp","Limosa limosa":"Grutto",
+  "Limosa lapponica":"Rosse Grutto","Calidris alpina":"Bonte Strandloper",
+  "Calidris canutus":"Kanoetstrandloper","Philomachus pugnax":"Kemphaan",
+  "Recurvirostra avosetta":"Kluut","Himantopus himantopus":"Steltkluut",
+  "Haematopus ostralegus":"Scholekster","Burhinus oedicnemus":"Griel",
+  // Meeuwen, sterns, alken
+  "Larus argentatus":"Zilvermeeuw","Larus canus":"Stormmeeuw",
+  "Larus ridibundus":"Kokmeeuw","Chroicocephalus ridibundus":"Kokmeeuw",
+  "Larus fuscus":"Kleine Mantelmeeuw","Larus marinus":"Grote Mantelmeeuw",
+  "Larus hyperboreus":"Grote Burgemeester","Rissa tridactyla":"Drieteenmeeuw",
+  "Sterna hirundo":"Visdief","Sternula albifrons":"Dwergstern",
+  "Sterna paradisaea":"Noordse Stern","Chlidonias niger":"Zwarte Stern",
+  "Alca torda":"Alk","Uria aalge":"Zeekoet","Fratercula arctica":"Papegaaiduiker",
+  // Watervogels
+  "Anas platyrhynchos":"Wilde Eend","Anas crecca":"Wintertaling",
+  "Anas querquedula":"Zomertaling","Anas acuta":"Pijlstaart",
+  "Anas penelope":"Smient","Anas strepera":"Krakeend",
+  "Anas clypeata":"Slobeend","Aythya fuligula":"Kuifeend",
+  "Aythya ferina":"Tafeleend","Aythya marila":"Topper",
+  "Bucephala clangula":"Brilduiker","Mergus merganser":"Grote Zaagbek",
+  "Mergus serrator":"Middelste Zaagbek","Mergellus albellus":"Nonnetje",
+  "Tadorna tadorna":"Bergeend","Branta canadensis":"Canadese Gans",
+  "Branta leucopsis":"Brandgans","Branta bernicla":"Rotgans",
+  "Anser anser":"Grauwe Gans","Anser albifrons":"Kolgans",
+  "Anser brachyrhynchus":"Kleine Rietgans","Anser fabalis":"Rietgans",
+  "Cygnus olor":"Knobbelzwaan","Cygnus cygnus":"Wilde Zwaan",
+  "Cygnus columbianus":"Kleine Zwaan","Aythya nyroca":"Witoogeend",
+  "Netta rufina":"Krooneend","Mareca strepera":"Krakeend",
+  "Mareca penelope":"Smient","Spatula clypeata":"Slobeend",
+  "Spatula querquedula":"Zomertaling",
+  // Rallen, fuuten, aalscholvers
+  "Rallus aquaticus":"Waterral","Crex crex":"Kwartelkoning",
+  "Gallinula chloropus":"Waterhoen","Fulica atra":"Meerkoet",
+  "Porzana porzana":"Porseleinhoen","Grus grus":"Kraanvogel",
+  "Podiceps cristatus":"Fuut","Podiceps grisegena":"Roodhalsfuut",
+  "Podiceps auritus":"Kuifduiker","Podiceps nigricollis":"Geoorde Fuut",
+  "Tachybaptus ruficollis":"Dodaars","Phalacrocorax carbo":"Aalscholver",
+  "Microcarbo pygmeus":"Dwergaalscholver",
+  // Overige
+  "Coturnix coturnix":"Kwartel","Perdix perdix":"Patrijs",
+  "Phasianus colchicus":"Fazant","Tetrao urogallus":"Auerhoen",
+  "Lyrurus tetrix":"Korhoen","Lagopus lagopus":"Moerassneeuwhoen",
+  "Alectoris rufa":"Rode Patrijs","Numida meleagris":"Helmparelhoen",
+  "Columba livia domestica":"Stadsduif"
+};
+
+// Hoofdletters normaliseren voor vergelijking
+const NL_NAMEN_LOWER = {};
+Object.entries(NL_NAMEN).forEach(([k,v]) => NL_NAMEN_LOWER[k.toLowerCase()] = v);
+
+function getNLNaam(wetenschappelijk, voorkeursnaam) {
+  if (!wetenschappelijk && !voorkeursnaam) return 'Onbekend';
+  // Probeer directe match op wetenschappelijke naam
+  if (wetenschappelijk) {
+    const hit = NL_NAMEN[wetenschappelijk] || NL_NAMEN_LOWER[wetenschappelijk.toLowerCase()];
+    if (hit) return hit;
+    // Probeer op genus+soort (eerste twee woorden)
+    const parts = wetenschappelijk.trim().split(' ');
+    if (parts.length >= 2) {
+      const gs = parts[0]+' '+parts[1];
+      const hit2 = NL_NAMEN[gs] || NL_NAMEN_LOWER[gs.toLowerCase()];
+      if (hit2) return hit2;
+    }
+  }
+  // Fallback: gebruik wat de API geeft (kan Engels zijn)
+  return voorkeursnaam || wetenschappelijk || 'Onbekend';
 }
 
 async function fetchiNatData(dateFrom, dateTo){
@@ -476,8 +654,8 @@ async function fetchiNatData(dateFrom, dateTo){
     .filter(o=>o.location)
     .map(o=>{
       const[lat,lng]=o.location.split(',').map(Number);
-      const naam=o.taxon?.preferred_common_name||o.taxon?.name||'Onbekend';
       const latin=o.taxon?.name||'';
+      const naam=getNLNaam(latin, o.taxon?.preferred_common_name);
       return {
         _src:'inat',
         id:'i'+o.id,
