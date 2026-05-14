@@ -415,7 +415,7 @@ async function fetchGBIFData(dateFrom, dateTo){
   url.searchParams.set('decimalLatitude',`${S.lat-kmToDeg(S.radius)},${S.lat+kmToDeg(S.radius)}`);
   url.searchParams.set('decimalLongitude',`${S.lng-kmToDeg(S.radius)},${S.lng+kmToDeg(S.radius)}`);
   url.searchParams.set('eventDate',`${dateFrom},${dateTo}`);
-  url.searchParams.set('country','NL');
+  // country filter verwijderd — werkt nu wereldwijd
   url.searchParams.set('limit','300');
   const resp=await fetch(url.toString());
   if(!resp.ok) throw new Error(`GBIF HTTP ${resp.status}`);
