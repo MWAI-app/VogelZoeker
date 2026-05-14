@@ -507,6 +507,34 @@ async function refreshToken(){
 }
 
 // ── RENDER
+function renderOnlyMarkers(){
+  // Alleen markers hertekenen (na soort-selectie), soortenpillen blijven intact
+  birdMarkers.clearLayers();
+  const byPos={};
+  S.observations.forEach(o=>{
+    const c=o.point?.coordinates;if(!c)return;
+    const key=`${parseFloat(c[1]).toFixed(4)},${parseFloat(c[0]).toFixed(4)}`;
+    if(!byPos[key])byPos[key]=[];byPos[key].push(o);
+  });
+  Object.entries(byPos).forEach(([key,obs])=>{
+    const[lat,lng]=key.split(',').map(Number);
+    const isSelected=S.selectedSpecies&&obs.some(o=>(o.species_detail?.name||'Onbekend')===S.selectedSpecies);
+    const marker=L.marker([lat,lng],{icon:birdIcon(obs[0].number||1,isSelected),zIndexOffset:isSelected?1000:0});
+    let html='';
+    obs.slice(0,4).forEach((o,i)=>{
+      const naam=o.species_detail?.name||'Onbekend';
+      const latin=o.species_detail?.scientific_name||'';
+      const datum=o.date||'?';
+      const n=o.number>1?`${o.number}×`:'';
+      if(i>0)html+='<hr class="popup-sep">';
+      html+=`<div class="popup-soort">${naam}</div>${latin?`<div class="popup-latin">${latin}</div>`:''}<div class="popup-datum">📅 ${datum}</div>${n?`<div class="popup-aantal">${n}</div>`:''}`;
+    });
+    if(obs.length>4)html+=`<hr class="popup-sep"><div class="popup-latin">+${obs.length-4} meer hier</div>`;
+    marker.bindPopup(html,{maxWidth:230});
+    birdMarkers.addLayer(marker);
+  });
+}
+
 function render(){
   birdMarkers.clearLayers();
   const byPos={};
@@ -553,7 +581,7 @@ function zoomTo(naam){
   if(S.selectedSpecies===naam){
     S.selectedSpecies=null;
     document.querySelectorAll('.species-pill').forEach(p=>p.classList.remove('highlight'));
-    renderMarkers();
+    renderOnlyMarkers();
     return;
   }
   S.selectedSpecies=naam;
@@ -562,7 +590,7 @@ function zoomTo(naam){
   const[lng,lat]=o.point.coordinates;
   map.flyTo([lat,lng],14,{duration:1.2});
   document.querySelectorAll('.species-pill').forEach(p=>p.classList.toggle('highlight',p.textContent.trim().startsWith(naam)));
-  renderMarkers(); // Herrender met blauwe stippen voor geselecteerde soort
+  renderOnlyMarkers(); // Herrender met blauwe stippen voor geselecteerde soort
 }
 
 // ── CONTROLS
