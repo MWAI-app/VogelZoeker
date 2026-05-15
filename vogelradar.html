@@ -101,6 +101,10 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
 .pill-count{font-family:var(--font-mono);font-size:.6rem;color:var(--amber)}
 .empty-state{text-align:center;padding:5px 0;color:var(--muted);font-size:.8rem}
 
+/* REGISTREER PANEEL */
+.reg-label{font-size:.68rem;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
+.reg-stap{border-bottom:1px solid var(--border);padding-bottom:10px}
+
 /* TOAST */
 #toast{position:fixed;bottom:155px;left:50%;transform:translateX(-50%) translateY(14px);background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 15px;border-radius:30px;font-size:.75rem;opacity:0;transition:all .3s;pointer-events:none;z-index:1000;white-space:nowrap}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -131,6 +135,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
   <header>
     <div class="logo"><span class="logo-icon">🪶</span> VogelRadar</div>
     <div class="header-right">
+      <button class="btn-icon" id="btn-registreer" onclick="toggleRegistreer()" title="Waarneming registreren">🎯</button>
       <button class="btn-icon" id="btn-info" onclick="toggleInfo()" title="Broninfo">ℹ</button>
       <button class="btn-icon" id="btn-manual" onclick="toggleManualMode()" title="Klik op kaart voor positie">📍</button>
       <div class="status-dot" id="status-dot"></div>
@@ -179,6 +184,62 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
       <div class="empty-state">Positie wordt bepaald…</div>
     </div>
   </div>
+</div>
+
+<!-- REGISTREER PANEEL -->
+<div id="reg-paneel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:900;background:var(--surface);border-top:2px solid var(--accent);border-radius:16px 16px 0 0;padding:18px 16px 28px;box-shadow:0 -8px 32px rgba(0,0,0,.5)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div style="font-family:var(--font-head);font-size:1.1rem;font-weight:700;color:var(--accent2)">🎯 Waarneming registreren</div>
+    <button onclick="sluitRegistreer()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.1rem">✕</button>
+  </div>
+
+  <!-- Stap 1: Locatie -->
+  <div class="reg-stap" id="reg-stap-loc">
+    <div class="reg-label">1. Tik locatie op de kaart</div>
+    <div id="reg-loc-status" style="font-family:var(--font-mono);font-size:.72rem;color:var(--muted);margin-top:4px">Nog geen locatie geselecteerd</div>
+  </div>
+
+  <!-- Stap 2: Soort -->
+  <div class="reg-stap" style="margin-top:12px">
+    <div class="reg-label">2. Soort</div>
+    <div style="position:relative;margin-top:5px">
+      <input id="reg-soort" type="text" placeholder="Typ Nederlandse of Latijnse naam…"
+        oninput="zoekSoort(this.value)"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 13px;color:var(--text);font-family:var(--font-body);font-size:.9rem;outline:none">
+      <div id="reg-suggesties" style="display:none;position:absolute;bottom:100%;left:0;right:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:4px;max-height:160px;overflow-y:auto;z-index:100"></div>
+    </div>
+    <input id="reg-soort-taxon" type="hidden">
+    <input id="reg-soort-latin" type="hidden">
+  </div>
+
+  <!-- Stap 3: Aantal -->
+  <div class="reg-stap" style="margin-top:12px;display:flex;align-items:center;gap:12px">
+    <div class="reg-label" style="white-space:nowrap">3. Aantal</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+      <button onclick="aantalAanpassen(-1)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:1.1rem">−</button>
+      <span id="reg-aantal-val" style="font-family:var(--font-mono);font-size:1rem;color:var(--accent2);min-width:24px;text-align:center">1</span>
+      <button onclick="aantalAanpassen(1)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:1.1rem">+</button>
+    </div>
+  </div>
+
+  <!-- Stap 4: Foto -->
+  <div class="reg-stap" style="margin-top:12px">
+    <div class="reg-label">4. Foto (optioneel)</div>
+    <div style="margin-top:5px;display:flex;align-items:center;gap:10px">
+      <label style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:.78rem;color:var(--text);cursor:pointer;white-space:nowrap">
+        📁 Kies foto
+        <input type="file" id="reg-foto" accept="image/*" onchange="fotoGekozen(this)" style="display:none">
+      </label>
+      <span id="reg-foto-naam" style="font-size:.75rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Geen foto</span>
+    </div>
+    <img id="reg-foto-preview" style="display:none;margin-top:8px;width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">
+  </div>
+
+  <!-- Versturen -->
+  <button id="btn-verstuur" onclick="verstuurNaariNat()" style="margin-top:18px;width:100%;background:var(--accent);border:none;border-radius:10px;padding:13px;color:#0c1008;font-family:var(--font-mono);font-size:.85rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;opacity:.4" disabled>
+    Openen in iNaturalist →
+  </button>
+  <div style="text-align:center;font-size:.68rem;color:var(--muted);margin-top:8px">iNaturalist app of website wordt geopend met jouw gegevens vooringevuld</div>
 </div>
 
 <div id="toast"></div>
@@ -839,6 +900,208 @@ function updateInfoPopup(){
 
   el.innerHTML=html||'<div style="color:var(--muted);font-size:.8rem">Geen brondata beschikbaar</div>';
   ts.textContent=S.lastFetch?new Date(S.lastFetch).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'—';
+}
+
+// ══ REGISTRATIE ══════════════════════════════════════════════════════════════
+const REG = {
+  lat: null,
+  lng: null,
+  aantal: 1,
+  taxonId: null,
+  soortNaam: '',
+  latinNaam: '',
+  fotoFile: null,
+  locatieModus: false
+};
+
+function toggleRegistreer(){
+  const paneel = document.getElementById('reg-paneel');
+  const isOpen = paneel.style.display !== 'none';
+  if(isOpen){
+    sluitRegistreer();
+  } else {
+    paneel.style.display = 'block';
+    document.getElementById('btn-registreer').classList.add('manual-active');
+    // Gebruik huidige GPS als startlocatie
+    if(S.lat){
+      REG.lat = S.lat;
+      REG.lng = S.lng;
+      document.getElementById('reg-loc-status').textContent =
+        `📍 ${S.lat.toFixed(5)}, ${S.lng.toFixed(5)} (GPS) — tik kaart voor precisie`;
+    }
+    // Activeer kaart-klik voor locatie
+    activeerLocatieModus();
+  }
+}
+
+function sluitRegistreer(){
+  document.getElementById('reg-paneel').style.display = 'none';
+  document.getElementById('btn-registreer').classList.remove('manual-active');
+  deactiveerLocatieModus();
+}
+
+function activeerLocatieModus(){
+  REG.locatieModus = true;
+  map.on('click', onRegKaartKlik);
+  map.getContainer().style.cursor = 'crosshair';
+}
+
+function deactiveerLocatieModus(){
+  REG.locatieModus = false;
+  map.off('click', onRegKaartKlik);
+  // Cursor alleen resetten als ook geen manual mode actief
+  if(!S.manualMode) map.getContainer().style.cursor = '';
+}
+
+let regLocMarker = null;
+function onRegKaartKlik(e){
+  // Voorkom conflict met normale kaart-klik
+  if(!REG.locatieModus) return;
+  REG.lat = e.latlng.lat;
+  REG.lng = e.latlng.lng;
+
+  // Marker op kaart
+  if(regLocMarker) map.removeLayer(regLocMarker);
+  regLocMarker = L.marker([REG.lat, REG.lng], {
+    icon: L.divIcon({
+      className:'',
+      html:`<div style="width:14px;height:14px;background:#4da6ff;border:2px solid #0c1008;border-radius:50%;box-shadow:0 0 8px #4da6ff"></div>`,
+      iconAnchor:[7,7]
+    })
+  }).addTo(map);
+
+  document.getElementById('reg-loc-status').textContent =
+    `📍 ${REG.lat.toFixed(5)}, ${REG.lng.toFixed(5)}`;
+
+  controleerVerstuurKnop();
+}
+
+// Soort zoeken via iNaturalist taxa API
+let zoekTimer = null;
+async function zoekSoort(q){
+  REG.taxonId = null;
+  REG.soortNaam = '';
+  REG.latinNaam = '';
+  document.getElementById('reg-soort-taxon').value = '';
+  controleerVerstuurKnop();
+
+  clearTimeout(zoekTimer);
+  if(q.length < 2){
+    document.getElementById('reg-suggesties').style.display = 'none';
+    return;
+  }
+
+  zoekTimer = setTimeout(async () => {
+    try{
+      const url = new URL('https://api.inaturalist.org/v1/taxa');
+      url.searchParams.set('q', q);
+      url.searchParams.set('taxon_id', '3'); // Aves
+      url.searchParams.set('per_page', '8');
+      url.searchParams.set('locale', 'nl');
+      const resp = await fetch(url.toString());
+      const data = await resp.json();
+      toonSuggesties(data.results || []);
+    } catch(e){}
+  }, 350);
+}
+
+function toonSuggesties(taxa){
+  const el = document.getElementById('reg-suggesties');
+  if(!taxa.length){ el.style.display='none'; return; }
+
+  el.innerHTML = taxa.map(t => {
+    const nl = getNLNaam(t.name, t.preferred_common_name);
+    const latin = t.name || '';
+    return `<div onclick="kiesSoort(${t.id},'${nl.replace(/'/g,"\'")}','${latin.replace(/'/g,"\'")}','${(t.preferred_common_name||'').replace(/'/g,"\'")}'); " style="padding:9px 13px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.85rem;color:var(--text)" onmouseover="this.style.background='var(--faint)'" onmouseout="this.style.background=''">
+      <span style="color:var(--accent2)">${nl}</span>
+      <span style="font-size:.68rem;color:var(--muted);margin-left:6px;font-style:italic">${latin}</span>
+    </div>`;
+  }).join('');
+  el.style.display = 'block';
+}
+
+function kiesSoort(id, naam, latin, engNaam){
+  REG.taxonId = id;
+  REG.soortNaam = naam;
+  REG.latinNaam = latin;
+  document.getElementById('reg-soort').value = naam;
+  document.getElementById('reg-soort-taxon').value = id;
+  document.getElementById('reg-soort-latin').value = latin;
+  document.getElementById('reg-suggesties').style.display = 'none';
+  controleerVerstuurKnop();
+}
+
+function aantalAanpassen(delta){
+  REG.aantal = Math.max(1, (REG.aantal || 1) + delta);
+  document.getElementById('reg-aantal-val').textContent = REG.aantal;
+}
+
+function fotoGekozen(input){
+  const file = input.files[0];
+  if(!file) return;
+  REG.fotoFile = file;
+  document.getElementById('reg-foto-naam').textContent = file.name;
+  const preview = document.getElementById('reg-foto-preview');
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+}
+
+function controleerVerstuurKnop(){
+  const ok = REG.lat && REG.taxonId;
+  const btn = document.getElementById('btn-verstuur');
+  btn.disabled = !ok;
+  btn.style.opacity = ok ? '1' : '.4';
+}
+
+function verstuurNaariNat(){
+  if(!REG.lat || !REG.taxonId) return;
+
+  const nu = new Date();
+  const datum = nu.toISOString().slice(0,10);
+  const tijdstip = nu.toTimeString().slice(0,5);
+
+  // iNaturalist new observation URL met vooringevulde velden
+  const url = new URL('https://www.inaturalist.org/observations/new');
+  url.searchParams.set('taxon_id',    REG.taxonId);
+  url.searchParams.set('taxon_name',  REG.latinNaam);
+  url.searchParams.set('latitude',    REG.lat.toFixed(6));
+  url.searchParams.set('longitude',   REG.lng.toFixed(6));
+  url.searchParams.set('observed_on', datum);
+  url.searchParams.set('time_observed_at', tijdstip);
+  if(REG.aantal > 1) url.searchParams.set('description', `Aantal: ${REG.aantal}`);
+
+  // Probeer eerst de iNaturalist app via deep link (Android/iOS)
+  // Als app niet geïnstalleerd is, valt dit terug op de website
+  const appUrl = url.toString().replace('https://www.inaturalist.org', 'inaturalist://');
+  const webUrl = url.toString();
+
+  // Tijdelijke iframe-truc: probeer app, val terug op web na 1.5s
+  const iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  document.body.appendChild(iframe);
+
+  let appGeopend = false;
+  window.addEventListener('blur', () => { appGeopend = true; }, { once: true });
+
+  iframe.src = appUrl;
+  setTimeout(() => {
+    document.body.removeChild(iframe);
+    if(!appGeopend) window.open(webUrl, '_blank');
+  }, 1500);
+
+  toast(`iNaturalist geopend voor ${REG.soortNaam}`);
+
+  // Paneel sluiten en reset
+  setTimeout(() => {
+    sluitRegistreer();
+    REG.taxonId = null; REG.soortNaam = ''; REG.latinNaam = '';
+    REG.fotoFile = null; REG.aantal = 1;
+    document.getElementById('reg-soort').value = '';
+    document.getElementById('reg-aantal-val').textContent = '1';
+    document.getElementById('reg-foto-naam').textContent = 'Geen foto';
+    document.getElementById('reg-foto-preview').style.display = 'none';
+    if(regLocMarker){ map.removeLayer(regLocMarker); regLocMarker = null; }
+  }, 800);
 }
 
 setInterval(()=>{if(S.lat&&!S.manualMode)fetchBirds()},5*60*1000);
