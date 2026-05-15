@@ -104,6 +104,8 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
 /* REGISTREER PANEEL */
 .reg-label{font-size:.68rem;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
 .reg-stap{border-bottom:1px solid var(--border);padding-bottom:10px}
+#reg-paneel{transition:transform .3s cubic-bezier(.4,0,.2,1)}
+.reg-minibalk{display:flex;align-items:center;justify-content:center;gap:8px;font-size:.82rem;color:var(--amber);font-family:var(--font-mono)}
 
 /* TOAST */
 #toast{position:fixed;bottom:155px;left:50%;transform:translateX(-50%) translateY(14px);background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 15px;border-radius:30px;font-size:.75rem;opacity:0;transition:all .3s;pointer-events:none;z-index:1000;white-space:nowrap}
@@ -188,14 +190,21 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
 
 <!-- REGISTREER PANEEL -->
 <div id="reg-paneel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:900;background:var(--surface);border-top:2px solid var(--accent);border-radius:16px 16px 0 0;padding:18px 16px 28px;box-shadow:0 -8px 32px rgba(0,0,0,.5)">
+  <!-- Minibalk zichtbaar als paneel ingeklapt is -->
+  <div class="reg-minibalk" id="reg-minibalk" style="display:none;padding:4px 0 10px">
+    ✦ Tik op de kaart om locatie te kiezen ✦
+  </div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
     <div style="font-family:var(--font-head);font-size:1.1rem;font-weight:700;color:var(--accent2)">🎯 Waarneming registreren</div>
     <button onclick="sluitRegistreer()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.1rem">✕</button>
   </div>
 
   <!-- Stap 1: Locatie -->
-  <div class="reg-stap" id="reg-stap-loc">
-    <div class="reg-label">1. Tik locatie op de kaart</div>
+  <div class="reg-stap" id="reg-stap-loc" onclick="herKiesLocatie()" style="cursor:pointer">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="reg-label">1. Tik locatie op de kaart</div>
+      <span style="font-size:.68rem;color:var(--accent);font-family:var(--font-mono)" id="reg-loc-edit"></span>
+    </div>
     <div id="reg-loc-status" style="font-family:var(--font-mono);font-size:.72rem;color:var(--muted);margin-top:4px">Nog geen locatie geselecteerd</div>
   </div>
 
@@ -940,17 +949,32 @@ function sluitRegistreer(){
   deactiveerLocatieModus();
 }
 
+function herKiesLocatie(){
+  // Opnieuw locatie kiezen — paneel inklapppen
+  activeerLocatieModus();
+  document.getElementById('reg-loc-edit').textContent = '';
+}
+
 function activeerLocatieModus(){
   REG.locatieModus = true;
   map.on('click', onRegKaartKlik);
   map.getContainer().style.cursor = 'crosshair';
+  // Paneel inklappen tot smalle balk zodat kaart zichtbaar is
+  const paneel = document.getElementById('reg-paneel');
+  paneel.dataset.volledig = 'false';
+  paneel.style.transform = 'translateY(calc(100% - 52px))';
+  document.getElementById('reg-minibalk').style.display = 'flex';
 }
 
 function deactiveerLocatieModus(){
   REG.locatieModus = false;
   map.off('click', onRegKaartKlik);
-  // Cursor alleen resetten als ook geen manual mode actief
   if(!S.manualMode) map.getContainer().style.cursor = '';
+  // Paneel weer volledig tonen
+  const paneel = document.getElementById('reg-paneel');
+  paneel.style.transform = 'translateY(0)';
+  paneel.dataset.volledig = 'true';
+  document.getElementById('reg-minibalk').style.display = 'none';
 }
 
 let regLocMarker = null;
@@ -972,7 +996,10 @@ function onRegKaartKlik(e){
 
   document.getElementById('reg-loc-status').textContent =
     `📍 ${REG.lat.toFixed(5)}, ${REG.lng.toFixed(5)}`;
+  document.getElementById('reg-loc-edit').textContent = '↺ wijzigen';
 
+  // Paneel weer uitklappen na locatiekeuze
+  deactiveerLocatieModus();
   controleerVerstuurKnop();
 }
 
