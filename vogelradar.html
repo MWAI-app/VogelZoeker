@@ -1106,10 +1106,10 @@ function verstuurNaariNat(){
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 
   if(isAndroid){
-    // Android Intent URL — opent app als geïnstalleerd, anders Play Store of browser
-    const params = url.searchParams.toString();
-    const intentUrl = `intent://observations/new?${params}#Intent;scheme=inaturalist;package=org.inaturalist.android;S.browser_fallback_url=${encodeURIComponent(webUrl)};end`;
-    window.location.href = intentUrl;
+    // Android App Links: gewone https link naar inaturalist.org
+    // Android onderschept deze automatisch en opent de app als die geïnstalleerd is
+    // Dit werkt in zowel Chrome als Samsung Browser
+    window.location.href = webUrl;
   } else if(isIOS){
     // iOS universal link
     const appUrl = webUrl.replace('https://www.inaturalist.org', 'inaturalist://');
