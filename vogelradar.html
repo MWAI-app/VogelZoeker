@@ -1097,24 +1097,28 @@ function verstuurNaariNat(){
   url.searchParams.set('time_observed_at', tijdstip);
   if(REG.aantal > 1) url.searchParams.set('description', `Aantal: ${REG.aantal}`);
 
-  // Probeer eerst de iNaturalist app via deep link (Android/iOS)
-  // Als app niet geïnstalleerd is, valt dit terug op de website
-  const appUrl = url.toString().replace('https://www.inaturalist.org', 'inaturalist://');
+  // Android deep link: intent:// schema opent de app direct
+  // iOS gebruikt inaturalist:// schema
+  // Fallback naar website als app niet aanwezig
   const webUrl = url.toString();
 
-  // Tijdelijke iframe-truc: probeer app, val terug op web na 1.5s
-  const iframe = document.createElement('iframe');
-  iframe.style.display = 'none';
-  document.body.appendChild(iframe);
+  const isAndroid = /android/i.test(navigator.userAgent);
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
 
-  let appGeopend = false;
-  window.addEventListener('blur', () => { appGeopend = true; }, { once: true });
-
-  iframe.src = appUrl;
-  setTimeout(() => {
-    document.body.removeChild(iframe);
-    if(!appGeopend) window.open(webUrl, '_blank');
-  }, 1500);
+  if(isAndroid){
+    // Android Intent URL — opent app als geïnstalleerd, anders Play Store of browser
+    const params = url.searchParams.toString();
+    const intentUrl = `intent://observations/new?${params}#Intent;scheme=inaturalist;package=org.inaturalist.android;S.browser_fallback_url=${encodeURIComponent(webUrl)};end`;
+    window.location.href = intentUrl;
+  } else if(isIOS){
+    // iOS universal link
+    const appUrl = webUrl.replace('https://www.inaturalist.org', 'inaturalist://');
+    window.location.href = appUrl;
+    setTimeout(() => { window.open(webUrl, '_blank'); }, 1500);
+  } else {
+    // Desktop: gewoon browser
+    window.open(webUrl, '_blank');
+  }
 
   toast(`iNaturalist geopend voor ${REG.soortNaam}`);
 
