@@ -399,20 +399,27 @@ function startGPS(){
   );
 }
 
+// GPS-positie altijd bijhouden, ook als manualMode aan is
+let S_gpsLat = null, S_gpsLng = null;
+
 function onPosUpdate(pos){
   const{latitude:lat,longitude:lng}=pos.coords;
+  S_gpsLat = lat; S_gpsLng = lng; // altijd GPS opslaan
+
+  // Als handmatige modus actief: positie en kaart NIET overschrijven
+  if(S.manualMode) return;
+
   const isFirst=!S.lat;
   const moved=isFirst||dist(lat,lng,S.lat,S.lng)>0.08;
-  S.lat=lat;S.lng=lng;S.manualMode=false;
+  S.lat=lat;S.lng=lng;
   setPosMarker(lat,lng);
-  // Kaart centreren — wacht tot Leaflet volledig geladen is
+
   if(isFirst){
     map.whenReady(()=>map.setView([lat,lng],13));
   } else if(moved){
     map.panTo([lat,lng]);
   }
   document.getElementById('fallback-banner').style.display='none';
-  document.getElementById('btn-manual').classList.remove('manual-active');
 
   // Autoscan: nieuwe scan als >1km verplaatst tov laatste scan
   const scanMoved = !S.lastScanLat || dist(lat,lng,S.lastScanLat,S.lastScanLng)>1.0;
@@ -431,8 +438,20 @@ function showFallback(){
 function toggleManualMode(){
   S.manualMode=!S.manualMode;
   document.getElementById('btn-manual').classList.toggle('manual-active',S.manualMode);
-  if(S.manualMode){enableMapClick();toast('Tik op de kaart om positie in te stellen')}
-  else disableMapClick();
+  if(S.manualMode){
+    enableMapClick();
+    toast('Tik op de kaart om positie in te stellen');
+  } else {
+    disableMapClick();
+    // Terug naar GPS-positie als die beschikbaar is
+    if(S_gpsLat){
+      S.lat=S_gpsLat; S.lng=S_gpsLng;
+      setPosMarker(S.lat,S.lng);
+      map.panTo([S.lat,S.lng]);
+      fetchBirds();
+      toast('Terug naar GPS-positie');
+    }
+  }
 }
 function enableMapClick(){map.on('click',onMapClick);map.getContainer().style.cursor='crosshair'}
 function disableMapClick(){map.off('click',onMapClick);map.getContainer().style.cursor=''}
@@ -440,11 +459,14 @@ function onMapClick(e){
   S.lat=e.latlng.lat;S.lng=e.latlng.lng;
   setPosMarker(S.lat,S.lng);
   map.setView([S.lat,S.lng],13);
+  // manualMode blijft AAN — knop blijft actief totdat gebruiker hem uitzet
+  // Klik-handler uitzetten tot volgende tik (anders elke tik een nieuwe positie)
   disableMapClick();
-  S.manualMode=false;
-  document.getElementById('btn-manual').classList.remove('manual-active');
+  // Heractiveer klik-modus zodat gebruiker positie kan verfijnen
+  enableMapClick();
   document.getElementById('fallback-banner').style.display='none';
-  fetchBirds();toast('Positie ingesteld — vogels laden…');
+  fetchBirds();
+  toast('Positie ingesteld — tik opnieuw om te wijzigen');
 }
 
 // ── DATA
@@ -699,7 +721,113 @@ const NL_NAMEN = {
   "Phasianus colchicus":"Fazant","Tetrao urogallus":"Auerhoen",
   "Lyrurus tetrix":"Korhoen","Lagopus lagopus":"Moerassneeuwhoen",
   "Alectoris rufa":"Rode Patrijs","Numida meleagris":"Helmparelhoen",
-  "Columba livia domestica":"Stadsduif"
+  "Columba livia domestica":"Stadsduif",
+  // Extra soorten die in de praktijk voorkomen
+  "Alopochen aegyptiaca":"Nijlgans",
+  "Alopochen aegyptiacus":"Nijlgans",
+  "Chroicocephalus ridibundus":"Kokmeeuw",
+  "Hydrocoloeus minutus":"Dwergmeeuw",
+  "Ichthyaetus melanocephalus":"Zwartkopmeeuw",
+  "Larus michahellis":"Geelpootmeeuw",
+  "Larus cachinnans":"Pontische Meeuw",
+  "Columba livia":"Stadsduif",
+  "Passer hispaniolensis":"Spaanse Mus",
+  "Melanocorypha calandra":"Kalanderleeuwerik",
+  "Calandrella brachydactyla":"Kortteenleeuwerik",
+  "Oriolus oriolus":"Wielewaal",
+  "Lanius collurio":"Grauwe Klauwier",
+  "Lanius excubitor":"Klapekster",
+  "Lanius minor":"Kleine Klauwier",
+  "Lanius senator":"Roodkopklauwier",
+  "Muscicapa striata":"Grauwe Vliegenvanger",
+  "Ficedula hypoleuca":"Bonte Vliegenvanger",
+  "Ficedula albicollis":"Withalsvliegenvanger",
+  "Ficedula parva":"Kleine Vliegenvanger",
+  "Monticola saxatilis":"Rode Rotslijster",
+  "Monticola solitarius":"Blauwe Rotslijster",
+  "Oenanthe hispanica":"Blonde Tapuit",
+  "Anthus petrosus":"Oeverpieper",
+  "Anthus richardi":"Grote Pieper",
+  "Emberiza cia":"Grijze Gors",
+  "Emberiza cirlus":"Cirlgors",
+  "Emberiza pusilla":"Dwerggors",
+  "Emberiza rustica":"Bosgors",
+  "Emberiza aureola":"Wilgors",
+  "Calcarius lapponicus":"IJsgors",
+  "Plectrophenax nivalis":"Sneeuwgors",
+  "Prunella atrogularis":"Zwartkeelsneeuwvink",
+  "Accentor modularis":"Heggenmus",
+  "Cettia cetti":"Cetti Zanger",
+  "Cisticola juncidis":"Graszanger",
+  "Panurus biarmicus":"Baardman",
+  "Bombycilla garrulus":"Pestvogel",
+  "Cinclus cinclus":"Waterspreeuw",
+  "Tichodroma muraria":"Rotskruiper",
+  "Corvus dauuricus":"Dauurse Kauw",
+  "Nucifraga caryocatactes":"Notenkraker",
+  "Perisoreus infaustus":"Taigagaai",
+  "Cyanopica cyanus":"Blauwe Ekster",
+  "Podiceps nigricollis":"Geoorde Fuut",
+  "Gavia stellata":"Roodkeelduiker",
+  "Gavia arctica":"Parelduiker",
+  "Gavia immer":"IJsduiker",
+  "Puffinus puffinus":"Noordse Pijlstormvogel",
+  "Fulmarus glacialis":"Noordse Stormvogel",
+  "Morus bassanus":"Jan van Gent",
+  "Phalacrocorax aristotelis":"Kuifaalscholver",
+  "Egretta garzetta":"Kleine Zilverreiger",
+  "Ardeola ralloides":"Ralreiger",
+  "Platalea leucorodia":"Lepelaar",
+  "Threskiornis aethiopicus":"Heilige Ibis",
+  "Anser erythropus":"Dwergrietgans",
+  "Chen caerulescens":"Sneeuwgans",
+  "Aythya collaris":"Ringsnaveleend",
+  "Melanitta nigra":"Zwarte Zee-eend",
+  "Melanitta fusca":"Grote Zee-eend",
+  "Clangula hyemalis":"IJseend",
+  "Somateria mollissima":"Eider",
+  "Mergus albellus":"Nonnetje",
+  "Oxyura leucocephala":"Witkopeend",
+  "Circus hudsonius":"Amerikaanse Kiekendief",
+  "Hieraaetus pennatus":"Dwergarend",
+  "Hieraaetus fasciatus":"Havikarend",
+  "Aquila pomarina":"Schreeuwarend",
+  "Aquila clanga":"Bastaardarend",
+  "Buteo rufinus":"Arendbuizerd",
+  "Falco vespertinus":"Roodpootvalk",
+  "Falco eleonorae":"Eleonora Valk",
+  "Falco cherrug":"Sakervalk",
+  "Falco biarmicus":"Lannervalk",
+  "Turnix sylvaticus":"Vechtkwartel",
+  "Porzana pusilla":"Kleinst Waterhoen",
+  "Gallinula chloropus":"Waterhoen",
+  "Porphyrio porphyrio":"Purperhoen",
+  "Tetrax tetrax":"Kleine Trap",
+  "Otis tarda":"Grote Trap",
+  "Charadrius morinellus":"Morinelplevier",
+  "Eudromias morinellus":"Morinelplevier",
+  "Limicola falcinellus":"Breedbekstrandloper",
+  "Tryngites subruficollis":"Blonde Ruiter",
+  "Phalaropus lobatus":"Grauwe Franjepoot",
+  "Phalaropus fulicarius":"Rosse Franjepoot",
+  "Stercorarius parasiticus":"Kleine Jager",
+  "Stercorarius pomarinus":"Middelste Jager",
+  "Stercorarius longicaudus":"Kleinste Jager",
+  "Stercorarius skua":"Grote Jager",
+  "Sterna caspia":"Reuzenstern",
+  "Sterna sandvicensis":"Grote Stern",
+  "Thalasseus sandvicensis":"Grote Stern",
+  "Chlidonias leucopterus":"Witvleugelstern",
+  "Chlidonias hybrida":"Witwangstern",
+  "Alle alle":"Kleine Alk",
+  "Cepphus grylle":"Zwarte Zeekoet",
+  "Cuculus canorus":"Koekoek",
+  "Clamator glandarius":"Kuifkoekoek",
+  "Bubo scandiacus":"Sneeuwuil",
+  "Surnia ulula":"Sperwuil",
+  "Coracias garrulus":"Scharrelaar",
+  "Merops apiaster":"Bijeneter",
+  "Trogon sp.":"Trogon"
 };
 
 // Hoofdletters normaliseren voor vergelijking
