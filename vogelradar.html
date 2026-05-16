@@ -261,6 +261,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
 <div id="toast"></div>
 
 <script>
+const EBIRD_KEY='gs8u9ftt35j1';
 const S={token:null,lat:null,lng:null,radius:5,days:3,observations:[],watching:null,lastFetch:null,manualMode:false,demoMode:false,bronnen:{},selectedSpecies:null,autoscan:false,lastScanLat:null,lastScanLng:null};
 let map,posMarker,radiusCircle,birdMarkers,mapReady=false;
 
@@ -365,7 +366,7 @@ function initMap(){
   if(mapReady)return;mapReady=true;
   map=L.map('map',{zoomControl:true}).setView([51.58,4.78],11);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    attribution:'© OpenStreetMap | Data: GBIF & iNaturalist',maxZoom:19
+    attribution:'© OpenStreetMap | Data: GBIF, iNaturalist & eBird',maxZoom:19
   }).addTo(map);
   birdMarkers=L.layerGroup().addTo(map);
 }
@@ -480,16 +481,18 @@ async function fetchGBIF(){
   const dateTo=today.toISOString().slice(0,10);
 
   // Beide APIs parallel bevragen
-  const [gbifResults, inatResults] = await Promise.allSettled([
+  const [gbifResults, inatResults, ebirdResults] = await Promise.allSettled([
     fetchGBIFData(dateFrom, dateTo),
-    fetchiNatData(dateFrom, dateTo)
+    fetchiNatData(dateFrom, dateTo),
+    fetchEBirdData()
   ]);
 
-  const gbif = gbifResults.status==='fulfilled' ? gbifResults.value : [];
-  const inat = inatResults.status==='fulfilled' ? inatResults.value : [];
+  const gbif  = gbifResults.status==='fulfilled'   ? gbifResults.value   : [];
+  const inat  = inatResults.status==='fulfilled'   ? inatResults.value   : [];
+  const ebird = ebirdResults.status==='fulfilled'  ? ebirdResults.value  : [];
 
   // Samenvoegen en dedupliceren op soort+datum+locatie (50m nauwkeurigheid)
-  const all = [...gbif, ...inat];
+  const all = [...gbif, ...inat, ...ebird];
   const seen = new Set();
   S.observations = all.filter(o => {
     const coords = o.point?.coordinates;
@@ -761,6 +764,55 @@ async function fetchiNatData(dateFrom, dateTo){
   return results;
 }
 
+async function fetchEBirdData(){
+  S.bronnen.ebird = null;
+  // eBird recent observations binnen radius
+  // max dist = 50km, back = aantal dagen (max 30)
+  const dist = Math.min(Math.round(S.radius), 50);
+  const back = Math.min(S.days, 30);
+  const url = new URL('https://api.ebird.org/v2/data/obs/geo/recent');
+  url.searchParams.set('lat',      S.lat);
+  url.searchParams.set('lng',      S.lng);
+  url.searchParams.set('dist',     dist);
+  url.searchParams.set('back',     back);
+  url.searchParams.set('cat',      'species');   // alleen echte soorten, geen hybriden
+  url.searchParams.set('maxResults','200');
+
+  const resp = await fetch(url.toString(), {
+    headers: { 'X-eBirdApiToken': EBIRD_KEY }
+  });
+  if(!resp.ok){ S.bronnen.ebird={fout:true}; throw new Error(`eBird HTTP ${resp.status}`); }
+
+  const data = await resp.json();
+
+  const results = (data || []).map(o => {
+    const latin = o.sciName || '';
+    const naam  = getNLNaam(latin, o.comName);
+    return {
+      _src:  'ebird',
+      id:    'e' + o.subId + o.speciesCode,
+      date:  o.obsDt ? o.obsDt.slice(0,10) : '?',
+      number: o.howMany || 1,
+      point: {
+        type: 'Point',
+        coordinates: [o.lng, o.lat]
+      },
+      species_detail: {
+        id:              'e' + o.speciesCode,
+        name:            naam,
+        scientific_name: latin
+      }
+    };
+  });
+
+  S.bronnen.ebird = {
+    waarnemingen: results.length,
+    soorten: new Set(results.map(o => o.species_detail?.id)).size,
+    fout: false
+  };
+  return results;
+}
+
 async function refreshToken(){
   const r=localStorage.getItem('vr_refresh');if(!r)return false;
   try{
@@ -900,7 +952,8 @@ function updateInfoPopup(){
   let html='';
   const bronLijst=[
     {key:'gbif', label:'GBIF', url:'https://gbif.org', kleur:'var(--accent)'},
-    {key:'inat', label:'iNaturalist', url:'https://inaturalist.org', kleur:'#74ac00'}
+    {key:'inat', label:'iNaturalist', url:'https://inaturalist.org', kleur:'#74ac00'},
+    {key:'ebird', label:'eBird', url:'https://ebird.org', kleur:'#c8802a'}
   ];
 
   bronLijst.forEach(b2=>{
