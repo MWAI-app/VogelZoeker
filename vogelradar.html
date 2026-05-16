@@ -105,6 +105,8 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
 .reg-label{font-size:.68rem;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
 .reg-stap{border-bottom:1px solid var(--border);padding-bottom:10px}
 #reg-paneel{transition:transform .3s cubic-bezier(.4,0,.2,1)}
+#btn-autoscan.actief{border-color:var(--accent);color:var(--accent2);background:var(--faint)}
+#btn-autoscan.actief #autoscan-icon{animation:pulse 2s infinite}
 .reg-minibalk{display:flex;align-items:center;justify-content:center;gap:8px;font-size:.82rem;color:var(--amber);font-family:var(--font-mono)}
 
 /* TOAST */
@@ -173,9 +175,14 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
         <div class="stat"><span class="stat-val" id="stat-waarnemingen">—</span><span class="stat-lbl">Waarn.</span></div>
         <div class="stat"><span class="stat-val" id="stat-km">5</span><span class="stat-lbl">Km</span></div>
       </div>
-      <button class="btn-refresh" id="btn-refresh" onclick="refreshData()">
-        <span id="refresh-icon">↻</span> Vernieuwen
-      </button>
+      <div style="display:flex;gap:6px">
+        <button class="btn-refresh" id="btn-autoscan" onclick="toggleAutoscan()" title="Autoscan bij 1km verplaatsing">
+          <span id="autoscan-icon">⊙</span>
+        </button>
+        <button class="btn-refresh" id="btn-refresh" onclick="refreshData()">
+          <span id="refresh-icon">↻</span> Vernieuwen
+        </button>
+      </div>
     </div>
     <div class="radius-row">
       <label>Straal</label>
@@ -254,7 +261,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
 <div id="toast"></div>
 
 <script>
-const S={token:null,lat:null,lng:null,radius:5,days:3,observations:[],watching:null,lastFetch:null,manualMode:false,demoMode:false,bronnen:{},selectedSpecies:null};
+const S={token:null,lat:null,lng:null,radius:5,days:3,observations:[],watching:null,lastFetch:null,manualMode:false,demoMode:false,bronnen:{},selectedSpecies:null,autoscan:false,lastScanLat:null,lastScanLng:null};
 let map,posMarker,radiusCircle,birdMarkers,mapReady=false;
 
 // ── INIT
@@ -397,11 +404,20 @@ function onPosUpdate(pos){
   const moved=isFirst||dist(lat,lng,S.lat,S.lng)>0.08;
   S.lat=lat;S.lng=lng;S.manualMode=false;
   setPosMarker(lat,lng);
-  if(isFirst)map.setView([lat,lng],13);
-  else if(moved)map.panTo([lat,lng]);
+  // Kaart centreren — wacht tot Leaflet volledig geladen is
+  if(isFirst){
+    map.whenReady(()=>map.setView([lat,lng],13));
+  } else if(moved){
+    map.panTo([lat,lng]);
+  }
   document.getElementById('fallback-banner').style.display='none';
   document.getElementById('btn-manual').classList.remove('manual-active');
-  if(moved||!S.lastFetch)fetchBirds();
+
+  // Autoscan: nieuwe scan als >1km verplaatst tov laatste scan
+  const scanMoved = !S.lastScanLat || dist(lat,lng,S.lastScanLat,S.lastScanLng)>1.0;
+  if(isFirst||!S.lastFetch||(S.autoscan&&scanMoved)){
+    fetchBirds();
+  }
 }
 
 function showFallback(){
@@ -486,6 +502,8 @@ async function fetchGBIF(){
 
   S.selectedSpecies=null;
   S.lastFetch=Date.now();
+  S.lastScanLat=S.lat;
+  S.lastScanLng=S.lng;
   render();
   const n=new Set(S.observations.map(o=>o.species_detail?.id)).size;
   setStatus(`${n} soorten`,'active');
@@ -1133,6 +1151,21 @@ function verstuurNaariNat(){
     document.getElementById('reg-foto-preview').style.display = 'none';
     if(regLocMarker){ map.removeLayer(regLocMarker); regLocMarker = null; }
   }, 800);
+}
+
+function toggleAutoscan(){
+  S.autoscan = !S.autoscan;
+  const btn = document.getElementById('btn-autoscan');
+  const icon = document.getElementById('autoscan-icon');
+  if(S.autoscan){
+    btn.classList.add('actief');
+    icon.textContent = '⊙';
+    toast('Autoscan aan — scan bij elke km verplaatsing');
+  } else {
+    btn.classList.remove('actief');
+    icon.textContent = '⊙';
+    toast('Autoscan uit');
+  }
 }
 
 setInterval(()=>{if(S.lat&&!S.manualMode)fetchBirds()},5*60*1000);
