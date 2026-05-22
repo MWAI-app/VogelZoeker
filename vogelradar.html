@@ -262,6 +262,8 @@ header{display:flex;align-items:center;justify-content:space-between;padding:11p
 
 <script>
 const EBIRD_KEY='gs8u9ftt35j1';
+const PROXY_URL='/api/waarneming'; // Netlify proxy voor waarneming.nl
+const WAARNEMING_ACTIEF = false;   // Zet op true zodra client_id is ingevuld in proxy
 const S={token:null,lat:null,lng:null,radius:5,days:3,observations:[],watching:null,lastFetch:null,manualMode:false,demoMode:false,bronnen:{},selectedSpecies:null,autoscan:false,lastScanLat:null,lastScanLng:null};
 let map,posMarker,radiusCircle,birdMarkers,mapReady=false;
 
@@ -503,18 +505,23 @@ async function fetchGBIF(){
   const dateTo=today.toISOString().slice(0,10);
 
   // Beide APIs parallel bevragen
-  const [gbifResults, inatResults, ebirdResults] = await Promise.allSettled([
+  const bronPromises = [
     fetchGBIFData(dateFrom, dateTo),
     fetchiNatData(dateFrom, dateTo),
     fetchEBirdData()
-  ]);
+  ];
+  // Waarneming.nl toevoegen als proxy actief is en token beschikbaar
+  if(WAARNEMING_ACTIEF && S.token) bronPromises.push(fetchWaarnemingData());
 
-  const gbif  = gbifResults.status==='fulfilled'   ? gbifResults.value   : [];
-  const inat  = inatResults.status==='fulfilled'   ? inatResults.value   : [];
-  const ebird = ebirdResults.status==='fulfilled'  ? ebirdResults.value  : [];
+  const resultaten = await Promise.allSettled(bronPromises);
+
+  const gbif  = resultaten[0]?.status==='fulfilled' ? resultaten[0].value : [];
+  const inat  = resultaten[1]?.status==='fulfilled' ? resultaten[1].value : [];
+  const ebird = resultaten[2]?.status==='fulfilled' ? resultaten[2].value : [];
+  const waarn = resultaten[3]?.status==='fulfilled' ? resultaten[3].value : [];
 
   // Samenvoegen en dedupliceren op soort+datum+locatie (50m nauwkeurigheid)
-  const all = [...gbif, ...inat, ...ebird];
+  const all = [...gbif, ...inat, ...ebird, ...waarn];
   const seen = new Set();
   S.observations = all.filter(o => {
     const coords = o.point?.coordinates;
@@ -536,6 +543,52 @@ async function fetchGBIF(){
   toast(`${totaal} waarnemingen · ${n} soorten`);
   // Info popup bijwerken als die open is
   if(document.getElementById('info-popup').style.display!=='none') updateInfoPopup();
+}
+
+async function fetchWaarnemingData(){
+  // Waarneming.nl via Netlify proxy — werkt zodra client_id is ingevuld
+  S.bronnen.waarneming = null;
+  const today = new Date().toISOString().slice(0,10);
+  const params = new URLSearchParams({
+    lat:            S.lat,
+    lng:            S.lng,
+    days:           S.days,
+    end_date:       today,
+    species_group:  '1',
+    limit:          '300'
+  });
+
+  try {
+    const resp = await fetch(`${PROXY_URL}/observations?${params}`, {
+      headers: { 'Authorization': `Bearer ${S.token}` }
+    });
+    if(!resp.ok) { S.bronnen.waarneming={fout:true}; throw new Error(`Waarneming HTTP ${resp.status}`); }
+
+    const data = await resp.json();
+    const results = (data.results || []).map(o => ({
+      _src:   'waarneming',
+      id:     'w' + o.id,
+      date:   o.date || '?',
+      number: o.number || 1,
+      point:  o.point,
+      species_detail: {
+        id:              'w' + o.species_detail?.id,
+        name:            o.species_detail?.name || 'Onbekend',
+        scientific_name: o.species_detail?.scientific_name || ''
+      }
+    }));
+
+    S.bronnen.waarneming = {
+      waarnemingen: results.length,
+      soorten: new Set(results.map(o => o.species_detail?.id)).size,
+      fout: false
+    };
+    return results;
+  } catch(e) {
+    S.bronnen.waarneming = { fout: true };
+    console.error('Waarneming proxy fout:', e);
+    return [];
+  }
 }
 
 async function fetchGBIFData(dateFrom, dateTo){
@@ -1081,7 +1134,8 @@ function updateInfoPopup(){
   const bronLijst=[
     {key:'gbif', label:'GBIF', url:'https://gbif.org', kleur:'var(--accent)'},
     {key:'inat', label:'iNaturalist', url:'https://inaturalist.org', kleur:'#74ac00'},
-    {key:'ebird', label:'eBird', url:'https://ebird.org', kleur:'#c8802a'}
+    {key:'ebird', label:'eBird', url:'https://ebird.org', kleur:'#c8802a'},
+    {key:'waarneming', label:'Waarneming.nl', url:'https://waarneming.nl', kleur:'#2a7fc8'}
   ];
 
   bronLijst.forEach(b2=>{
