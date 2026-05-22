@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0c1008">
+<title>VogelRadar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root {
+  --bg:#0c1008;--surface:#141c0e;--surface2:#1c2814;--border:#2a3d1e;
+  --accent:#7ecb35;--accent2:#c8f26a;--amber:#e8a234;--red:#d63b2f;
+  --text:#ddecc4;--muted:#6a8a4a;--faint:#3a5220;
+  --font-head:'Playfair Display',Georgia,serif;
+  --font-mono:'Space Mono',monospace;
+  --font-body:'DM Sans',sans-serif;
+  --radius:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-weight:300;min-height:100dvh;overflow:hidden}
+
+/* LOGIN */
+#login-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;z-index:9000}
+.login-logo{font-family:var(--font-head);font-size:2.2rem;font-weight:700;color:var(--accent2);margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.login-logo-icon{animation:soar 4s ease-in-out infinite;display:inline-block}
+@keyframes soar{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-5px) rotate(5deg)}}
+.login-sub{color:var(--muted);font-size:.85rem;margin-bottom:32px;text-align:center}
+.login-card{width:100%;max-width:360px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:26px 22px}
+.login-card label{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:5px;margin-top:14px}
+.login-card label:first-child{margin-top:0}
+.login-card input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px 13px;color:var(--text);font-family:var(--font-body);font-size:.95rem;outline:none;transition:border .2s}
+.login-card input:focus{border-color:var(--accent)}
+.login-note{font-size:.7rem;color:var(--muted);margin-top:9px;line-height:1.5}
+.login-note a{color:var(--accent);text-decoration:none}
+.btn-login{margin-top:20px;width:100%;background:var(--accent);border:none;border-radius:8px;padding:13px;color:#0c1008;font-family:var(--font-mono);font-size:.83rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:opacity .2s}
+.btn-login:hover{opacity:.85}
+.btn-login:disabled{opacity:.4;cursor:default}
+#login-error{color:var(--red);font-size:.78rem;margin-top:10px;text-align:center;min-height:18px}
+.login-skip{margin-top:14px;font-size:.76rem;color:var(--muted);text-align:center;cursor:pointer;text-decoration:underline}
+.login-skip:hover{color:var(--text)}
+
+/* APP */
+#app{display:none;height:100dvh;flex-direction:column}
+#app.visible{display:flex}
+
+/* HEADER */
+header{display:flex;align-items:center;justify-content:space-between;padding:11px 15px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.logo{font-family:var(--font-head);font-size:1.25rem;font-weight:700;color:var(--accent2);display:flex;align-items:center;gap:7px}
+.logo-icon{font-size:1rem;animation:soar 4s ease-in-out infinite}
+.header-right{display:flex;align-items:center;gap:7px}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.status-dot.active{background:var(--accent);box-shadow:0 0 5px var(--accent)}
+.status-dot.loading{background:var(--amber);animation:pulse 1s infinite}
+.status-dot.error{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.status-label{font-family:var(--font-mono);font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn-icon{background:var(--surface2);border:1px solid var(--border);color:var(--text);width:31px;height:31px;border-radius:7px;cursor:pointer;font-size:.85rem;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
+.btn-icon:hover{border-color:var(--accent)}
+.btn-icon.manual-active{border-color:var(--amber);background:#221a06;animation:pulse 1.5s infinite}
+
+/* BANNER */
+#fallback-banner{background:#1a1706;border-bottom:1px solid #4a3a10;padding:8px 15px;display:none;align-items:center;justify-content:space-between;font-size:.78rem;color:var(--amber);gap:10px;flex-shrink:0}
+#fallback-banner button{background:none;border:none;color:var(--amber);cursor:pointer;font-size:.95rem;opacity:.6}
+
+/* MAP */
+#map{flex:1;min-height:0}
+
+/* LEAFLET POPUP */
+.leaflet-popup-content-wrapper{background:var(--surface2)!important;color:var(--text)!important;border:1px solid var(--border)!important;border-radius:var(--radius)!important;box-shadow:0 8px 32px rgba(0,0,0,.6)!important}
+.leaflet-popup-tip{background:var(--surface2)!important}
+.leaflet-popup-content{margin:11px 13px!important;font-family:var(--font-body)}
+.popup-soort{font-family:var(--font-head);font-size:.95rem;font-weight:700;color:var(--accent2);margin-bottom:2px}
+.popup-latin{font-size:.68rem;color:var(--muted);margin-bottom:3px;font-style:italic}
+.popup-datum{font-size:.72rem;color:var(--text);opacity:.7}
+.popup-aantal{font-family:var(--font-mono);font-size:.72rem;color:var(--amber);margin-top:2px}
+.popup-sep{border:none;border-top:1px solid var(--border);margin:7px 0}
+
+/* BOTTOM */
+#bottom{background:var(--surface);border-top:1px solid var(--border);padding:9px 15px 11px;flex-shrink:0}
+.bottom-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.stats-row{display:flex;gap:14px}
+.stat{display:flex;flex-direction:column}
+.stat-val{font-family:var(--font-mono);font-size:1.05rem;color:var(--accent2);font-weight:700;line-height:1}
+.stat-lbl{font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:2px}
+.btn-refresh{background:var(--surface2);border:1px solid var(--border);color:var(--accent);border-radius:var(--radius);padding:6px 11px;font-family:var(--font-mono);font-size:.68rem;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all .2s;display:flex;align-items:center;gap:4px}
+.btn-refresh:hover{background:var(--faint);border-color:var(--accent)}
+.btn-refresh:disabled{opacity:.4;cursor:default}
+.radius-row{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.radius-row label{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;white-space:nowrap}
+#radius-slider{flex:1;accent-color:var(--accent);cursor:pointer}
+.radius-val{font-family:var(--font-mono);font-size:.7rem;color:var(--accent2);min-width:36px;text-align:right}
+.species-scroll{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.species-scroll::-webkit-scrollbar{display:none}
+.species-pill{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:.7rem;color:var(--text);white-space:nowrap;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px;flex-shrink:0}
+.species-pill:hover,.species-pill.highlight{background:var(--faint);border-color:var(--accent);color:var(--accent2)}
+.pill-count{font-family:var(--font-mono);font-size:.6rem;color:var(--amber)}
+.empty-state{text-align:center;padding:5px 0;color:var(--muted);font-size:.8rem}
+
+/* REGISTREER PANEEL */
+.reg-label{font-size:.68rem;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
+.reg-stap{border-bottom:1px solid var(--border);padding-bottom:10px}
+#reg-paneel{transition:transform .3s cubic-bezier(.4,0,.2,1)}
+#btn-autoscan.actief{border-color:var(--accent);color:var(--accent2);background:var(--faint)}
+#btn-autoscan.actief #autoscan-icon{animation:pulse 2s infinite}
+.reg-minibalk{display:flex;align-items:center;justify-content:center;gap:8px;font-size:.82rem;color:var(--amber);font-family:var(--font-mono)}
+
+/* TOAST */
+#toast{position:fixed;bottom:155px;left:50%;transform:translateX(-50%) translateY(14px);background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 15px;border-radius:30px;font-size:.75rem;opacity:0;transition:all .3s;pointer-events:none;z-index:1000;white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* POS MARKER */
+.pos-pulse-ring{width:24px;height:24px;border:2px solid var(--accent);border-radius:50%;animation:ring-pulse 2s ease-out infinite}
+@keyframes ring-pulse{0%{transform:scale(.5);opacity:1}100%{transform:scale(2.2);opacity:0}}
+.pos-dot{width:10px;height:10px;background:var(--accent);border:2px solid #0c1008;border-radius:50%;box-shadow:0 0 6px var(--accent);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+</style>
+</head>
+<body>
+
+<!-- SPLASH -->
+<div id="login-screen">
+  <div class="login-logo"><span class="login-logo-icon">🪶</span> VogelRadar</div>
+  <div class="login-sub">Vogelwaarnemingen van de laatste 14 dagen<br>via GBIF &amp; iNaturalist</div>
+  <div class="login-card" style="text-align:center">
+    <div style="font-size:.82rem;color:var(--muted);line-height:1.6;margin-bottom:20px">
+      Open data, geen account nodig.<br>
+      GPS bepaalt je positie automatisch.
+    </div>
+    <button class="btn-login" onclick="showApp(false)">Starten →</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header>
+    <div class="logo"><span class="logo-icon">🪶</span> VogelRadar</div>
+    <div class="header-right">
+      <button class="btn-icon" id="btn-registreer" onclick="toggleRegistreer()" title="Waarneming registreren">🎯</button>
+      <button class="btn-icon" id="btn-info" onclick="toggleInfo()" title="Broninfo">ℹ</button>
+      <button class="btn-icon" id="btn-manual" onclick="toggleManualMode()" title="Klik op kaart voor positie">📍</button>
+      <div class="status-dot" id="status-dot"></div>
+      <span class="status-label" id="status-label">Wachten…</span>
+    </div>
+  </header>
+
+  <div id="fallback-banner">
+    <span>📍 Tik op de kaart om je positie in te stellen</span>
+    <button onclick="document.getElementById('fallback-banner').style.display='none'">✕</button>
+  </div>
+
+  <!-- INFO POPUP -->
+  <div id="info-popup" style="display:none;position:absolute;top:50px;right:12px;z-index:800;width:260px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 32px rgba(0,0,0,.6);padding:16px">
+    <div style="font-family:var(--font-head);font-size:1rem;font-weight:700;color:var(--accent2);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+      Databronnen
+      <button onclick="toggleInfo()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem">✕</button>
+    </div>
+    <div id="info-content">
+      <div style="color:var(--muted);font-size:.8rem">Nog geen data geladen…</div>
+    </div>
+    <div style="margin-top:12px;font-size:.68rem;color:var(--muted);border-top:1px solid var(--border);padding-top:8px">
+      Laatste refresh: <span id="info-timestamp">—</span>
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <div id="bottom">
+    <div class="bottom-bar">
+      <div class="stats-row">
+        <div class="stat"><span class="stat-val" id="stat-soorten">—</span><span class="stat-lbl">Soorten</span></div>
+        <div class="stat"><span class="stat-val" id="stat-waarnemingen">—</span><span class="stat-lbl">Waarn.</span></div>
+        <div class="stat"><span class="stat-val" id="stat-km">5</span><span class="stat-lbl">Km</span></div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn-refresh" id="btn-autoscan" onclick="toggleAutoscan()" title="Autoscan bij 1km verplaatsing">
+          <span id="autoscan-icon">⊙</span>
+        </button>
+        <button class="btn-refresh" id="btn-refresh" onclick="refreshData()">
+          <span id="refresh-icon">↻</span> Vernieuwen
+        </button>
+      </div>
+    </div>
+    <div class="radius-row">
+      <label>Straal</label>
+      <input type="range" id="radius-slider" min="1" max="25" value="5" step="1" oninput="onRadiusChange(this.value)">
+      <span class="radius-val" id="radius-val">5 km</span>
+    </div>
+    <div class="species-scroll" id="species-scroll">
+      <div class="empty-state">Positie wordt bepaald…</div>
+    </div>
+  </div>
+</div>
+
+<!-- REGISTREER PANEEL -->
+<div id="reg-paneel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:900;background:var(--surface);border-top:2px solid var(--accent);border-radius:16px 16px 0 0;padding:18px 16px 28px;box-shadow:0 -8px 32px rgba(0,0,0,.5)">
+  <!-- Minibalk zichtbaar als paneel ingeklapt is -->
+  <div class="reg-minibalk" id="reg-minibalk" style="display:none;padding:4px 0 10px">
+    ✦ Tik op de kaart om locatie te kiezen ✦
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div style="font-family:var(--font-head);font-size:1.1rem;font-weight:700;color:var(--accent2)">🎯 Waarneming registreren</div>
+    <button onclick="sluitRegistreer()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.1rem">✕</button>
+  </div>
+
+  <!-- Stap 1: Locatie -->
+  <div class="reg-stap" id="reg-stap-loc" onclick="herKiesLocatie()" style="cursor:pointer">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="reg-label">1. Tik locatie op de kaart</div>
+      <span style="font-size:.68rem;color:var(--accent);font-family:var(--font-mono)" id="reg-loc-edit"></span>
+    </div>
+    <div id="reg-loc-status" style="font-family:var(--font-mono);font-size:.72rem;color:var(--muted);margin-top:4px">Nog geen locatie geselecteerd</div>
+  </div>
+
+  <!-- Stap 2: Soort -->
+  <div class="reg-stap" style="margin-top:12px">
+    <div class="reg-label">2. Soort</div>
+    <div style="position:relative;margin-top:5px">
+      <input id="reg-soort" type="text" placeholder="Typ Nederlandse of Latijnse naam…"
+        oninput="zoekSoort(this.value)"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 13px;color:var(--text);font-family:var(--font-body);font-size:.9rem;outline:none">
+      <div id="reg-suggesties" style="display:none;position:absolute;bottom:100%;left:0;right:0;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:4px;max-height:160px;overflow-y:auto;z-index:100"></div>
+    </div>
+    <input id="reg-soort-taxon" type="hidden">
+    <input id="reg-soort-latin" type="hidden">
+  </div>
+
+  <!-- Stap 3: Aantal -->
+  <div class="reg-stap" style="margin-top:12px;display:flex;align-items:center;gap:12px">
+    <div class="reg-label" style="white-space:nowrap">3. Aantal</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+      <button onclick="aantalAanpassen(-1)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:1.1rem">−</button>
+      <span id="reg-aantal-val" style="font-family:var(--font-mono);font-size:1rem;color:var(--accent2);min-width:24px;text-align:center">1</span>
+      <button onclick="aantalAanpassen(1)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:1.1rem">+</button>
+    </div>
+  </div>
+
+  <!-- Stap 4: Foto -->
+  <div class="reg-stap" style="margin-top:12px">
+    <div class="reg-label">4. Foto (optioneel)</div>
+    <div style="margin-top:5px;display:flex;align-items:center;gap:10px">
+      <label style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:.78rem;color:var(--text);cursor:pointer;white-space:nowrap">
+        📁 Kies foto
+        <input type="file" id="reg-foto" accept="image/*" onchange="fotoGekozen(this)" style="display:none">
+      </label>
+      <span id="reg-foto-naam" style="font-size:.75rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Geen foto</span>
+    </div>
+    <img id="reg-foto-preview" style="display:none;margin-top:8px;width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">
+  </div>
+
+  <!-- Versturen -->
+  <button id="btn-verstuur" onclick="verstuurNaariNat()" style="margin-top:18px;width:100%;background:var(--accent);border:none;border-radius:10px;padding:13px;color:#0c1008;font-family:var(--font-mono);font-size:.85rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;opacity:.4" disabled>
+    Openen in iNaturalist →
+  </button>
+  <div style="text-align:center;font-size:.68rem;color:var(--muted);margin-top:8px">iNaturalist app of website wordt geopend met jouw gegevens vooringevuld</div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const EBIRD_KEY='gs8u9ftt35j1';
+const PROXY_URL='/api/waarneming'; // Netlify proxy voor waarneming.nl
+const WAARNEMING_ACTIEF = false;   // Zet op true zodra client_id is ingevuld in proxy
+const S={token:null,lat:null,lng:null,radius:5,days:3,observations:[],watching:null,lastFetch:null,manualMode:false,demoMode:false,bronnen:{},selectedSpecies:null,autoscan:false,lastScanLat:null,lastScanLng:null};
+let map,posMarker,radiusCircle,birdMarkers,mapReady=false;
+
+// ── INIT
+window.addEventListener('DOMContentLoaded',()=>{});
+
+// ── LOGIN
+function togglePw(){
+  const inp=document.getElementById('login-pw');
+  const eye=document.getElementById('pw-eye');
+  if(inp.type==='password'){inp.type='text';eye.textContent='🙈'}
+  else{inp.type='password';eye.textContent='👁'}
+}
+
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pw=document.getElementById('login-pw').value;
+  const errEl=document.getElementById('login-error');
+  const btn=document.getElementById('btn-login');
+  if(!email||!pw){errEl.textContent='Vul e-mail en wachtwoord in.';return}
+  btn.disabled=true;btn.textContent='Bezig…';errEl.textContent='';
+  try{
+    // Probeer via Anthropic Claude API als CORS-proxy om token op te halen
+    const body=new URLSearchParams({client_id:'obs_app',grant_type:'password',email,password:pw});
+    // Directe fetch — werkt als waarneming.nl CORS toestaat, anders foutmelding met instructie
+    const resp=await fetch('https://waarneming.nl/api/v1/oauth2/token/',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},
+      body:body.toString()
+    });
+    if(!resp.ok&&resp.status===0){
+      // CORS geblokkeerd — toon token-instructie
+      showTokenFallback(email);
+      btn.disabled=false;btn.textContent='Inloggen';
+      return;
+    }
+    const data=await resp.json();
+    if(data.access_token){
+      S.token=data.access_token;
+      localStorage.setItem('vr_token',S.token);
+      if(data.refresh_token)localStorage.setItem('vr_refresh',data.refresh_token);
+      showApp(false);
+    } else {
+      errEl.textContent=data.error_description||data.detail||'Inloggen mislukt. Controleer je gegevens.';
+    }
+  }catch(e){
+    // Waarschijnlijk CORS — toon alternatieve instructie
+    showTokenFallback(email);
+    console.error(e);
+  }
+  btn.disabled=false;btn.textContent='Inloggen';
+}
+
+function showTokenFallback(email){
+  const errEl=document.getElementById('login-error');
+  errEl.innerHTML=`Directe verbinding geblokkeerd (CORS).<br>
+  <span style="color:var(--text);font-size:.75rem">
+  Plak hieronder je API-token van 
+  <a href="https://waarneming.nl/api/v1/oauth2/applications/" target="_blank" style="color:var(--accent)">waarneming.nl</a>:
+  </span>`;
+  // Toon token-invoerveld als dat nog niet bestaat
+  if(!document.getElementById('token-input')){
+    const card=document.querySelector('.login-card');
+    const div=document.createElement('div');
+    div.style.marginTop='10px';
+    div.innerHTML=`<input id="token-input" type="text" placeholder="Plak token hier…" 
+      style="width:100%;background:var(--surface2);border:1px solid var(--amber);border-radius:8px;padding:10px 13px;color:var(--text);font-family:var(--font-mono);font-size:.75rem;outline:none">
+      <button onclick="useToken()" style="margin-top:8px;width:100%;background:var(--amber);border:none;border-radius:8px;padding:11px;color:#0c1008;font-family:var(--font-mono);font-size:.8rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer">Token gebruiken</button>`;
+    card.appendChild(div);
+  }
+}
+
+function useToken(){
+  const t=document.getElementById('token-input')?.value.trim();
+  if(!t){return}
+  S.token=t;
+  localStorage.setItem('vr_token',t);
+  showApp(false);
+}
+
+function doLogout(){
+  localStorage.removeItem('vr_token');localStorage.removeItem('vr_refresh');
+  S.token=null;S.observations=[];
+  if(S.watching)navigator.geolocation.clearWatch(S.watching);
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('login-pw').value='';
+  document.getElementById('login-error').textContent='';
+}
+
+function showApp(demoMode){
+  S.demoMode=demoMode;
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').classList.add('visible');
+  initMap();
+  startGPS();
+  if(demoMode)toast('Demo: GBIF data, mogelijk vertraagd');
+}
+
+// ── KAART
+function initMap(){
+  if(mapReady)return;mapReady=true;
+  map=L.map('map',{zoomControl:true}).setView([51.58,4.78],11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap | Data: GBIF, iNaturalist & eBird',maxZoom:19
+  }).addTo(map);
+  birdMarkers=L.layerGroup().addTo(map);
+}
+
+function birdIcon(n, selected){
+  const color=selected?'#4da6ff':n>5?'#e8a234':'#7ecb35';
+  const size=selected?14:n>5?13:10;
+  const glow=selected?'0 0 8px #4da6ff99':n>5?`0 0 5px ${color}66`:`0 0 5px ${color}66`;
+  return L.divIcon({className:'',html:`<div style="width:${size}px;height:${size}px;background:${color};border:2px solid #0c1008;border-radius:50%;box-shadow:${glow}"></div>`,iconAnchor:[size/2,size/2]});
+}
+
+function setPosMarker(lat,lng){
+  if(posMarker)map.removeLayer(posMarker);
+  if(radiusCircle)map.removeLayer(radiusCircle);
+  posMarker=L.marker([lat,lng],{icon:L.divIcon({className:'',html:`<div style="position:relative;width:24px;height:24px"><div class="pos-pulse-ring"></div><div class="pos-dot"></div></div>`,iconAnchor:[12,12]})}).addTo(map);
+  radiusCircle=L.circle([lat,lng],{radius:S.radius*1000,color:'#7ecb35',fillColor:'#7ecb35',fillOpacity:.04,weight:1,dashArray:'4 6'}).addTo(map);
+}
+
+// ── GPS
+function startGPS(){
+  if(!navigator.geolocation){showFallback();return}
+  setStatus('GPS bepalen…','loading');
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      onPosUpdate(pos);
+      S.watching=navigator.geolocation.watchPosition(onPosUpdate,()=>{},{enableHighAccuracy:true,maximumAge:15000,timeout:30000});
+    },
+    err=>{console.warn('GPS:',err.code,err.message);showFallback()},
+    {enableHighAccuracy:true,timeout:12000,maximumAge:0}
+  );
+}
+
+// GPS-positie altijd bijhouden, ook als manualMode aan is
+let S_gpsLat = null, S_gpsLng = null;
+
+function onPosUpdate(pos){
+  const{latitude:lat,longitude:lng}=pos.coords;
+  S_gpsLat = lat; S_gpsLng = lng; // altijd GPS opslaan
+
+  // Als handmatige modus actief: positie en kaart NIET overschrijven
+  if(S.manualMode) return;
+
+  const isFirst=!S.lat;
+  const moved=isFirst||dist(lat,lng,S.lat,S.lng)>0.08;
+  S.lat=lat;S.lng=lng;
+  setPosMarker(lat,lng);
+
+  if(isFirst){
+    map.whenReady(()=>map.setView([lat,lng],13));
+  } else if(moved){
+    map.panTo([lat,lng]);
+  }
+  document.getElementById('fallback-banner').style.display='none';
+
+  // Autoscan: nieuwe scan als >1km verplaatst tov laatste scan
+  const scanMoved = !S.lastScanLat || dist(lat,lng,S.lastScanLat,S.lastScanLng)>1.0;
+  if(isFirst||!S.lastFetch||(S.autoscan&&scanMoved)){
+    fetchBirds();
+  }
+}
+
+function showFallback(){
+  setStatus('Klik op kaart','error');
+  document.getElementById('fallback-banner').style.display='flex';
+  enableMapClick();
+}
+
+// ── HANDMATIGE POSITIE
+function toggleManualMode(){
+  S.manualMode=!S.manualMode;
+  document.getElementById('btn-manual').classList.toggle('manual-active',S.manualMode);
+  if(S.manualMode){
+    enableMapClick();
+    toast('Tik op de kaart om positie in te stellen');
+  } else {
+    disableMapClick();
+    // Terug naar GPS-positie als die beschikbaar is
+    if(S_gpsLat){
+      S.lat=S_gpsLat; S.lng=S_gpsLng;
+      setPosMarker(S.lat,S.lng);
+      map.panTo([S.lat,S.lng]);
+      fetchBirds();
+      toast('Terug naar GPS-positie');
+    }
+  }
+}
+function enableMapClick(){map.on('click',onMapClick);map.getContainer().style.cursor='crosshair'}
+function disableMapClick(){map.off('click',onMapClick);map.getContainer().style.cursor=''}
+function onMapClick(e){
+  S.lat=e.latlng.lat;S.lng=e.latlng.lng;
+  setPosMarker(S.lat,S.lng);
+  map.setView([S.lat,S.lng],13);
+  // manualMode blijft AAN — knop blijft actief totdat gebruiker hem uitzet
+  // Klik-handler uitzetten tot volgende tik (anders elke tik een nieuwe positie)
+  disableMapClick();
+  // Heractiveer klik-modus zodat gebruiker positie kan verfijnen
+  enableMapClick();
+  document.getElementById('fallback-banner').style.display='none';
+  fetchBirds();
+  toast('Positie ingesteld — tik opnieuw om te wijzigen');
+}
+
+// ── DATA
+async function fetchBirds(){
+  if(!S.lat)return;
+  setStatus('Laden…','loading');setBusy(true);
+  // Altijd gecombineerde GBIF+iNaturalist (waarneming.nl API vereist goedgekeurd client_id)
+  await fetchGBIF();
+  setBusy(false);
+}
+
+async function fetchWaarneming(){
+  const today=new Date().toISOString().slice(0,10);
+  const url=new URL('https://waarneming.nl/api/v1/observations/around-point/');
+  url.searchParams.set('lat',S.lat);url.searchParams.set('lng',S.lng);
+  url.searchParams.set('days',S.days);url.searchParams.set('end_date',today);
+  url.searchParams.set('species_group','1');url.searchParams.set('limit','200');
+  try{
+    const resp=await fetch(url.toString(),{headers:{'Authorization':`Bearer ${S.token}`,'Accept-Language':'nl'}});
+    if(resp.status===401){const ok=await refreshToken();if(ok)return fetchWaarneming();doLogout();return}
+    if(!resp.ok)throw new Error(`HTTP ${resp.status}`);
+    const data=await resp.json();
+    S.observations=data.results||[];
+    S.lastFetch=Date.now();
+    render();
+    const n=new Set(S.observations.map(o=>o.species_detail?.id)).size;
+    setStatus(`${n} soorten`,'active');
+  }catch(e){setStatus('Fout bij laden','error');toast('Laden mislukt');console.error(e)}
+}
+
+async function fetchGBIF(){
+  const today=new Date(),past=new Date(today);past.setDate(today.getDate()-21); // GBIF: 21 dagen ivm vertraging
+  const dateFrom=past.toISOString().slice(0,10);
+  const dateTo=today.toISOString().slice(0,10);
+
+  // Beide APIs parallel bevragen
+  const bronPromises = [
+    fetchGBIFData(dateFrom, dateTo),
+    fetchiNatData(dateFrom, dateTo),
+    fetchEBirdData()
+  ];
+  // Waarneming.nl toevoegen als proxy actief is en token beschikbaar
+  if(WAARNEMING_ACTIEF && S.token) bronPromises.push(fetchWaarnemingData());
+
+  const resultaten = await Promise.allSettled(bronPromises);
+
+  const gbif  = resultaten[0]?.status==='fulfilled' ? resultaten[0].value : [];
+  const inat  = resultaten[1]?.status==='fulfilled' ? resultaten[1].value : [];
+  const ebird = resultaten[2]?.status==='fulfilled' ? resultaten[2].value : [];
+  const waarn = resultaten[3]?.status==='fulfilled' ? resultaten[3].value : [];
+
+  // Samenvoegen en dedupliceren op soort+datum+locatie (50m nauwkeurigheid)
+  const all = [...gbif, ...inat, ...ebird, ...waarn];
+  const seen = new Set();
+  S.observations = all.filter(o => {
+    const coords = o.point?.coordinates;
+    if(!coords) return false;
+    const key = `${o.species_detail?.name}|${o.date}|${parseFloat(coords[1]).toFixed(3)},${parseFloat(coords[0]).toFixed(3)}`;
+    if(seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  S.selectedSpecies=null;
+  S.lastFetch=Date.now();
+  S.lastScanLat=S.lat;
+  S.lastScanLng=S.lng;
+  render();
+  const n=new Set(S.observations.map(o=>o.species_detail?.id)).size;
+  setStatus(`${n} soorten`,'active');
+  const totaal=S.observations.length;
+  toast(`${totaal} waarnemingen · ${n} soorten`);
+  // Info popup bijwerken als die open is
+  if(document.getElementById('info-popup').style.display!=='none') updateInfoPopup();
+}
+
+async function fetchWaarnemingData(){
+  // Waarneming.nl via Netlify proxy — werkt zodra client_id is ingevuld
+  S.bronnen.waarneming = null;
+  const today = new Date().toISOString().slice(0,10);
+  const params = new URLSearchParams({
+    lat:            S.lat,
+    lng:            S.lng,
+    days:           S.days,
+    end_date:       today,
+    species_group:  '1',
+    limit:          '300'
+  });
+
+  try {
+    const resp = await fetch(`${PROXY_URL}/observations?${params}`, {
+      headers: { 'Authorization': `Bearer ${S.token}` }
+    });
+    if(!resp.ok) { S.bronnen.waarneming={fout:true}; throw new Error(`Waarneming HTTP ${resp.status}`); }
+
+    const data = await resp.json();
+    const results = (data.results || []).map(o => ({
+      _src:   'waarneming',
+      id:     'w' + o.id,
+      date:   o.date || '?',
+      number: o.number || 1,
+      point:  o.point,
+      species_detail: {
+        id:              'w' + o.species_detail?.id,
+        name:            o.species_detail?.name || 'Onbekend',
+        scientific_name: o.species_detail?.scientific_name || ''
+      }
+    }));
+
+    S.bronnen.waarneming = {
+      waarnemingen: results.length,
+      soorten: new Set(results.map(o => o.species_detail?.id)).size,
+      fout: false
+    };
+    return results;
+  } catch(e) {
+    S.bronnen.waarneming = { fout: true };
+    console.error('Waarneming proxy fout:', e);
+    return [];
+  }
+}
+
+async function fetchGBIFData(dateFrom, dateTo){
+  const url=new URL('https://api.gbif.org/v1/occurrence/search');
+  url.searchParams.set('classKey','212');
+  url.searchParams.set('hasCoordinate','true');
+  url.searchParams.set('hasGeospatialIssue','false');
+  url.searchParams.set('decimalLatitude',`${S.lat-kmToDeg(S.radius)},${S.lat+kmToDeg(S.radius)}`);
+  url.searchParams.set('decimalLongitude',`${S.lng-kmToDeg(S.radius)},${S.lng+kmToDeg(S.radius)}`);
+  url.searchParams.set('eventDate',`${dateFrom},${dateTo}`);
+  // country filter verwijderd — werkt nu wereldwijd
+  url.searchParams.set('limit','300');
+  const resp=await fetch(url.toString());
+  if(!resp.ok) throw new Error(`GBIF HTTP ${resp.status}`);
+  const data=await resp.json();
+  const results=(data.results||[])
+    .filter(o=>o.decimalLatitude&&o.decimalLongitude&&dist(S.lat,S.lng,o.decimalLatitude,o.decimalLongitude)<=S.radius)
+    .map(o=>({
+      _src:'gbif',id:'g'+o.key,
+      date:o.eventDate?.slice(0,10)||'?',
+      number:o.individualCount||1,
+      point:{type:'Point',coordinates:[o.decimalLongitude,o.decimalLatitude]},
+      species_detail:{
+        id:'g'+o.speciesKey,
+        name:getNLNaam(o.scientificName||o.species, o.vernacularName),
+        scientific_name:o.scientificName||''
+      }
+    }));
+  S.bronnen.gbif={waarnemingen:results.length,soorten:new Set(results.map(o=>o.species_detail?.id)).size,fout:false};
+  return results;
+}
+
+// ── NEDERLANDSE VOGELNAMEN FALLBACK TABEL ─────────────────────────────────
+// Wetenschappelijke naam → Nederlandse naam (top ~250 Europese soorten)
+const NL_NAMEN = {
+  // Roofvogels
+  "Milvus milvus":"Rode Wouw","Milvus migrans":"Zwarte Wouw",
+  "Buteo buteo":"Buizerd","Buteo lagopus":"Ruigpootbuizerd",
+  "Accipiter nisus":"Sperwer","Accipiter gentilis":"Havik",
+  "Circus aeruginosus":"Bruine Kiekendief","Circus cyaneus":"Blauwe Kiekendief",
+  "Circus pygargus":"Grauwe Kiekendief","Falco tinnunculus":"Torenvalk",
+  "Falco subbuteo":"Boomvalk","Falco peregrinus":"Slechtvalk",
+  "Falco columbarius":"Smelleken","Pandion haliaetus":"Visarend",
+  "Haliaeetus albicilla":"Zeearend","Aquila chrysaetos":"Steenarend",
+  "Pernis apivorus":"Wespendief","Circus macrourus":"Steppekiekendief",
+  // Uilen
+  "Tyto alba":"Kerkuil","Strix aluco":"Bosuil","Strix uralensis":"Oeraluil",
+  "Asio otus":"Ransuil","Asio flammeus":"Velduil",
+  "Bubo bubo":"Oehoe","Athene noctua":"Steenuil",
+  "Glaucidium passerinum":"Dwerguil","Aegolius funereus":"Ruigpootuil",
+  // Uilen NL
+  "Otus scops":"Dwergooruil",
+  // Spechten
+  "Dendrocopos major":"Grote Bonte Specht","Dendrocopos minor":"Kleine Bonte Specht",
+  "Dendrocopos medius":"Middelste Bonte Specht","Dryocopus martius":"Zwarte Specht",
+  "Picus viridis":"Groene Specht","Picus canus":"Grijskopspecht",
+  "Picoides tridactylus":"Drieteenspecht","Jynx torquilla":"Draaihals",
+  // Zangvogels A
+  "Erithacus rubecula":"Roodborst","Luscinia megarhynchos":"Nachtegaal",
+  "Luscinia svecica":"Blauwborst","Phoenicurus ochruros":"Zwarte Roodstaart",
+  "Phoenicurus phoenicurus":"Gekraagde Roodstaart","Saxicola rubetra":"Paapje",
+  "Saxicola rubicola":"Roodborsttapuit","Oenanthe oenanthe":"Tapuit",
+  "Turdus merula":"Merel","Turdus pilaris":"Kramsvogel",
+  "Turdus philomelos":"Zanglijster","Turdus iliacus":"Koperwiek",
+  "Turdus viscivorus":"Grote Lijster","Turdus torquatus":"Beflijster",
+  // Zangvogels B
+  "Sylvia atricapilla":"Zwartkop","Sylvia borin":"Tuinfluiter",
+  "Sylvia communis":"Grasmus","Sylvia curruca":"Braamsluiper",
+  "Sylvia nisoria":"Sperwergrasmus","Sylvia melanocephala":"Kleine Zwartkop",
+  "Phylloscopus trochilus":"Fitis","Phylloscopus collybita":"Tjiftjaf",
+  "Phylloscopus sibilatrix":"Fluiter","Phylloscopus trochiloides":"Groenloofzanger",
+  "Regulus regulus":"Goudhaan","Regulus ignicapilla":"Vuurgoudhaan",
+  "Acrocephalus scirpaceus":"Kleine Karekiet","Acrocephalus palustris":"Bosrietzanger",
+  "Acrocephalus arundinaceus":"Grote Karekiet","Acrocephalus schoenobaenus":"Rietzanger",
+  "Locustella naevia":"Sprinkhaanzanger","Locustella fluviatilis":"Krekelzanger",
+  "Hippolais icterina":"Spotvogel","Hippolais polyglotta":"Orpheusspotvogel",
+  "Iduna opaca":"Vale Spotvogel",
+  // Mezen
+  "Parus major":"Koolmees","Cyanistes caeruleus":"Pimpelmees",
+  "Periparus ater":"Zwarte Mees","Lophophanes cristatus":"Kuifmees",
+  "Poecile palustris":"Glanskop","Poecile montanus":"Matkop",
+  "Aegithalos caudatus":"Staartmees","Remiz pendulinus":"Buidelmees",
+  // Vinken
+  "Fringilla coelebs":"Vink","Fringilla montifringilla":"Keep",
+  "Carduelis carduelis":"Putter","Carduelis chloris":"Groenling",
+  "Spinus spinus":"Sijs","Linaria cannabina":"Kneu",
+  "Linaria flavirostris":"Frater","Acanthis flammea":"Barmsijs",
+  "Acanthis cabaret":"Kleine Barmsijs","Loxia curvirostra":"Kruisbek",
+  "Loxia leucoptera":"Witbandkruisbek","Pyrrhula pyrrhula":"Goudvink",
+  "Coccothraustes coccothraustes":"Appelvink","Emberiza citrinella":"Geelgors",
+  "Emberiza schoeniclus":"Rietgors","Emberiza calandra":"Grauwe Gors",
+  "Emberiza hortulana":"Ortolaan","Miliaria calandra":"Grauwe Gors",
+  "Serinus serinus":"Europese Kanarie","Chloris chloris":"Groenling",
+  // Mussen, spreeuwen, kraaien
+  "Passer domesticus":"Huismus","Passer montanus":"Ringmus",
+  "Sturnus vulgaris":"Spreeuw","Pastor roseus":"Roze Spreeuw",
+  "Corvus corax":"Raaf","Corvus corone":"Zwarte Kraai",
+  "Corvus cornix":"Bonte Kraai","Corvus frugilegus":"Roek",
+  "Corvus monedula":"Kauw","Pica pica":"Ekster",
+  "Garrulus glandarius":"Vlaamse Gaai","Nucifraga caryocatactes":"Notenkraker",
+  "Pyrrhocorax pyrrhocorax":"Alpenkraai",
+  // Zwaluwen, gierzwaluwen
+  "Hirundo rustica":"Boerenzwaluw","Delichon urbicum":"Huiszwaluw",
+  "Riparia riparia":"Oeverzwaluw","Cecropis daurica":"Roodstuitzwaluw",
+  "Apus apus":"Gierzwaluw","Apus melba":"Alpengierzwaluw",
+  // Leeuweriken, piepers, kwikstaarten
+  "Alauda arvensis":"Veldleeuwerik","Lullula arborea":"Boomleeuwerik",
+  "Galerida cristata":"Kuifleeuwerik","Eremophila alpestris":"Strandleeuwerik",
+  "Anthus trivialis":"Boompieper","Anthus pratensis":"Graspieper",
+  "Anthus spinoletta":"Waterpieper","Anthus campestris":"Duinpieper",
+  "Anthus cervinus":"Roodkeelpieper","Motacilla alba":"Witte Kwikstaart",
+  "Motacilla flava":"Gele Kwikstaart","Motacilla cinerea":"Grote Gele Kwikstaart",
+  // Lijsterachtigen extra
+  "Cinclus cinclus":"Waterspreeuw","Troglodytes troglodytes":"Winterkoning",
+  "Prunella modularis":"Heggenmus","Prunella collaris":"Alpensneeuwvink",
+  // Boomklevers, boomkruipers
+  "Sitta europaea":"Boomklever","Certhia familiaris":"Boomkruiper",
+  "Certhia brachydactyla":"Kortteenboomkruiper","Tichodroma muraria":"Rotskruiper",
+  // IJsvogels, bijeneter, hop, nachtzwaluw
+  "Alcedo atthis":"IJsvogel","Merops apiaster":"Bijeneter",
+  "Upupa epops":"Hop","Coracias garrulus":"Scharrelaar",
+  "Caprimulgus europaeus":"Nachtzwaluw",
+  // Duiven, tortelduiven
+  "Columba palumbus":"Houtduif","Columba livia":"Rotsduif",
+  "Columba oenas":"Holenduif","Streptopelia turtur":"Zomertortel",
+  "Streptopelia decaocto":"Turkse Tortel",
+  // Reigers, ooievaars, lepelaar
+  "Ardea cinerea":"Blauwe Reiger","Ardea purpurea":"Purperreiger",
+  "Egretta garzetta":"Kleine Zilverreiger","Egretta alba":"Grote Zilverreiger",
+  "Ardea alba":"Grote Zilverreiger","Bubulcus ibis":"Koereiger",
+  "Nycticorax nycticorax":"Kwak","Ixobrychus minutus":"Woudaap",
+  "Botaurus stellaris":"Roerdomp","Ciconia ciconia":"Ooievaar",
+  "Ciconia nigra":"Zwarte Ooievaar","Platalea leucorodia":"Lepelaar",
+  "Plegadis falcinellus":"Zwarte Ibis",
+  // Steltlopers
+  "Vanellus vanellus":"Kievit","Pluvialis apricaria":"Goudplevier",
+  "Pluvialis squatarola":"Zilverplevier","Charadrius dubius":"Kleine Plevier",
+  "Charadrius hiaticula":"Bontbekplevier","Charadrius alexandrinus":"Strandplevier",
+  "Tringa totanus":"Tureluur","Tringa nebularia":"Groenpootruiter",
+  "Tringa ochropus":"Witgat","Tringa glareola":"Bosruiter",
+  "Actitis hypoleucos":"Oeverloper","Gallinago gallinago":"Watersnip",
+  "Scolopax rusticola":"Houtsnip","Numenius arquata":"Wulp",
+  "Numenius phaeopus":"Regenwulp","Limosa limosa":"Grutto",
+  "Limosa lapponica":"Rosse Grutto","Calidris alpina":"Bonte Strandloper",
+  "Calidris canutus":"Kanoetstrandloper","Philomachus pugnax":"Kemphaan",
+  "Recurvirostra avosetta":"Kluut","Himantopus himantopus":"Steltkluut",
+  "Haematopus ostralegus":"Scholekster","Burhinus oedicnemus":"Griel",
+  // Meeuwen, sterns, alken
+  "Larus argentatus":"Zilvermeeuw","Larus canus":"Stormmeeuw",
+  "Larus ridibundus":"Kokmeeuw","Chroicocephalus ridibundus":"Kokmeeuw",
+  "Larus fuscus":"Kleine Mantelmeeuw","Larus marinus":"Grote Mantelmeeuw",
+  "Larus hyperboreus":"Grote Burgemeester","Rissa tridactyla":"Drieteenmeeuw",
+  "Sterna hirundo":"Visdief","Sternula albifrons":"Dwergstern",
+  "Sterna paradisaea":"Noordse Stern","Chlidonias niger":"Zwarte Stern",
+  "Alca torda":"Alk","Uria aalge":"Zeekoet","Fratercula arctica":"Papegaaiduiker",
+  // Watervogels
+  "Anas platyrhynchos":"Wilde Eend","Anas crecca":"Wintertaling",
+  "Anas querquedula":"Zomertaling","Anas acuta":"Pijlstaart",
+  "Anas penelope":"Smient","Anas strepera":"Krakeend",
+  "Anas clypeata":"Slobeend","Aythya fuligula":"Kuifeend",
+  "Aythya ferina":"Tafeleend","Aythya marila":"Topper",
+  "Bucephala clangula":"Brilduiker","Mergus merganser":"Grote Zaagbek",
+  "Mergus serrator":"Middelste Zaagbek","Mergellus albellus":"Nonnetje",
+  "Tadorna tadorna":"Bergeend","Branta canadensis":"Canadese Gans",
+  "Branta leucopsis":"Brandgans","Branta bernicla":"Rotgans",
+  "Anser anser":"Grauwe Gans","Anser albifrons":"Kolgans",
+  "Anser brachyrhynchus":"Kleine Rietgans","Anser fabalis":"Rietgans",
+  "Cygnus olor":"Knobbelzwaan","Cygnus cygnus":"Wilde Zwaan",
+  "Cygnus columbianus":"Kleine Zwaan","Aythya nyroca":"Witoogeend",
+  "Netta rufina":"Krooneend","Mareca strepera":"Krakeend",
+  "Mareca penelope":"Smient","Spatula clypeata":"Slobeend",
+  "Spatula querquedula":"Zomertaling",
+  // Rallen, fuuten, aalscholvers
+  "Rallus aquaticus":"Waterral","Crex crex":"Kwartelkoning",
+  "Gallinula chloropus":"Waterhoen","Fulica atra":"Meerkoet",
+  "Porzana porzana":"Porseleinhoen","Grus grus":"Kraanvogel",
+  "Podiceps cristatus":"Fuut","Podiceps grisegena":"Roodhalsfuut",
+  "Podiceps auritus":"Kuifduiker","Podiceps nigricollis":"Geoorde Fuut",
+  "Tachybaptus ruficollis":"Dodaars","Phalacrocorax carbo":"Aalscholver",
+  "Microcarbo pygmeus":"Dwergaalscholver",
+  // Overige
+  "Coturnix coturnix":"Kwartel","Perdix perdix":"Patrijs",
+  "Phasianus colchicus":"Fazant","Tetrao urogallus":"Auerhoen",
+  "Lyrurus tetrix":"Korhoen","Lagopus lagopus":"Moerassneeuwhoen",
+  "Alectoris rufa":"Rode Patrijs","Numida meleagris":"Helmparelhoen",
+  "Columba livia domestica":"Stadsduif",
+  // Extra soorten die in de praktijk voorkomen
+  "Alopochen aegyptiaca":"Nijlgans",
+  "Alopochen aegyptiacus":"Nijlgans",
+  "Chroicocephalus ridibundus":"Kokmeeuw",
+  "Hydrocoloeus minutus":"Dwergmeeuw",
+  "Ichthyaetus melanocephalus":"Zwartkopmeeuw",
+  "Larus michahellis":"Geelpootmeeuw",
+  "Larus cachinnans":"Pontische Meeuw",
+  "Columba livia":"Stadsduif",
+  "Passer hispaniolensis":"Spaanse Mus",
+  "Melanocorypha calandra":"Kalanderleeuwerik",
+  "Calandrella brachydactyla":"Kortteenleeuwerik",
+  "Oriolus oriolus":"Wielewaal",
+  "Lanius collurio":"Grauwe Klauwier",
+  "Lanius excubitor":"Klapekster",
+  "Lanius minor":"Kleine Klauwier",
+  "Lanius senator":"Roodkopklauwier",
+  "Muscicapa striata":"Grauwe Vliegenvanger",
+  "Ficedula hypoleuca":"Bonte Vliegenvanger",
+  "Ficedula albicollis":"Withalsvliegenvanger",
+  "Ficedula parva":"Kleine Vliegenvanger",
+  "Monticola saxatilis":"Rode Rotslijster",
+  "Monticola solitarius":"Blauwe Rotslijster",
+  "Oenanthe hispanica":"Blonde Tapuit",
+  "Anthus petrosus":"Oeverpieper",
+  "Anthus richardi":"Grote Pieper",
+  "Emberiza cia":"Grijze Gors",
+  "Emberiza cirlus":"Cirlgors",
+  "Emberiza pusilla":"Dwerggors",
+  "Emberiza rustica":"Bosgors",
+  "Emberiza aureola":"Wilgors",
+  "Calcarius lapponicus":"IJsgors",
+  "Plectrophenax nivalis":"Sneeuwgors",
+  "Prunella atrogularis":"Zwartkeelsneeuwvink",
+  "Accentor modularis":"Heggenmus",
+  "Cettia cetti":"Cetti Zanger",
+  "Cisticola juncidis":"Graszanger",
+  "Panurus biarmicus":"Baardman",
+  "Bombycilla garrulus":"Pestvogel",
+  "Cinclus cinclus":"Waterspreeuw",
+  "Tichodroma muraria":"Rotskruiper",
+  "Corvus dauuricus":"Dauurse Kauw",
+  "Nucifraga caryocatactes":"Notenkraker",
+  "Perisoreus infaustus":"Taigagaai",
+  "Cyanopica cyanus":"Blauwe Ekster",
+  "Podiceps nigricollis":"Geoorde Fuut",
+  "Gavia stellata":"Roodkeelduiker",
+  "Gavia arctica":"Parelduiker",
+  "Gavia immer":"IJsduiker",
+  "Puffinus puffinus":"Noordse Pijlstormvogel",
+  "Fulmarus glacialis":"Noordse Stormvogel",
+  "Morus bassanus":"Jan van Gent",
+  "Phalacrocorax aristotelis":"Kuifaalscholver",
+  "Egretta garzetta":"Kleine Zilverreiger",
+  "Ardeola ralloides":"Ralreiger",
+  "Platalea leucorodia":"Lepelaar",
+  "Threskiornis aethiopicus":"Heilige Ibis",
+  "Anser erythropus":"Dwergrietgans",
+  "Chen caerulescens":"Sneeuwgans",
+  "Aythya collaris":"Ringsnaveleend",
+  "Melanitta nigra":"Zwarte Zee-eend",
+  "Melanitta fusca":"Grote Zee-eend",
+  "Clangula hyemalis":"IJseend",
+  "Somateria mollissima":"Eider",
+  "Mergus albellus":"Nonnetje",
+  "Oxyura leucocephala":"Witkopeend",
+  "Circus hudsonius":"Amerikaanse Kiekendief",
+  "Hieraaetus pennatus":"Dwergarend",
+  "Hieraaetus fasciatus":"Havikarend",
+  "Aquila pomarina":"Schreeuwarend",
+  "Aquila clanga":"Bastaardarend",
+  "Buteo rufinus":"Arendbuizerd",
+  "Falco vespertinus":"Roodpootvalk",
+  "Falco eleonorae":"Eleonora Valk",
+  "Falco cherrug":"Sakervalk",
+  "Falco biarmicus":"Lannervalk",
+  "Turnix sylvaticus":"Vechtkwartel",
+  "Porzana pusilla":"Kleinst Waterhoen",
+  "Gallinula chloropus":"Waterhoen",
+  "Porphyrio porphyrio":"Purperhoen",
+  "Tetrax tetrax":"Kleine Trap",
+  "Otis tarda":"Grote Trap",
+  "Charadrius morinellus":"Morinelplevier",
+  "Eudromias morinellus":"Morinelplevier",
+  "Limicola falcinellus":"Breedbekstrandloper",
+  "Tryngites subruficollis":"Blonde Ruiter",
+  "Phalaropus lobatus":"Grauwe Franjepoot",
+  "Phalaropus fulicarius":"Rosse Franjepoot",
+  "Stercorarius parasiticus":"Kleine Jager",
+  "Stercorarius pomarinus":"Middelste Jager",
+  "Stercorarius longicaudus":"Kleinste Jager",
+  "Stercorarius skua":"Grote Jager",
+  "Sterna caspia":"Reuzenstern",
+  "Sterna sandvicensis":"Grote Stern",
+  "Thalasseus sandvicensis":"Grote Stern",
+  "Chlidonias leucopterus":"Witvleugelstern",
+  "Chlidonias hybrida":"Witwangstern",
+  "Alle alle":"Kleine Alk",
+  "Cepphus grylle":"Zwarte Zeekoet",
+  "Cuculus canorus":"Koekoek",
+  "Clamator glandarius":"Kuifkoekoek",
+  "Bubo scandiacus":"Sneeuwuil",
+  "Surnia ulula":"Sperwuil",
+  "Coracias garrulus":"Scharrelaar",
+  "Merops apiaster":"Bijeneter",
+  "Trogon sp.":"Trogon"
+};
+
+// Hoofdletters normaliseren voor vergelijking
+const NL_NAMEN_LOWER = {};
+Object.entries(NL_NAMEN).forEach(([k,v]) => NL_NAMEN_LOWER[k.toLowerCase()] = v);
+
+function getNLNaam(wetenschappelijk, voorkeursnaam) {
+  if (!wetenschappelijk && !voorkeursnaam) return 'Onbekend';
+  // Probeer directe match op wetenschappelijke naam
+  if (wetenschappelijk) {
+    const hit = NL_NAMEN[wetenschappelijk] || NL_NAMEN_LOWER[wetenschappelijk.toLowerCase()];
+    if (hit) return hit;
+    // Probeer op genus+soort (eerste twee woorden)
+    const parts = wetenschappelijk.trim().split(' ');
+    if (parts.length >= 2) {
+      const gs = parts[0]+' '+parts[1];
+      const hit2 = NL_NAMEN[gs] || NL_NAMEN_LOWER[gs.toLowerCase()];
+      if (hit2) return hit2;
+    }
+  }
+  // Fallback: gebruik wat de API geeft (kan Engels zijn)
+  return voorkeursnaam || wetenschappelijk || 'Onbekend';
+}
+
+async function fetchiNatData(dateFrom, dateTo){
+  S.bronnen.inat=null; // reset
+  // iNaturalist open API — geen authenticatie nodig, recente data
+  const url=new URL('https://api.inaturalist.org/v1/observations');
+  url.searchParams.set('taxon_id','3');          // Aves taxon id in iNaturalist
+  url.searchParams.set('lat', S.lat);
+  url.searchParams.set('lng', S.lng);
+  url.searchParams.set('radius', S.radius);      // km
+  url.searchParams.set('d1', dateFrom);
+  url.searchParams.set('d2', dateTo);
+  url.searchParams.set('geo','true');
+  url.searchParams.set('identified','true');
+  url.searchParams.set('per_page','200');
+  url.searchParams.set('locale','nl');
+  const resp=await fetch(url.toString());
+  if(!resp.ok) throw new Error(`iNat HTTP ${resp.status}`);
+  const data=await resp.json();
+  const results=(data.results||[])
+    .filter(o=>o.location)
+    .map(o=>{
+      const[lat,lng]=o.location.split(',').map(Number);
+      const latin=o.taxon?.name||'';
+      const naam=getNLNaam(latin, o.taxon?.preferred_common_name);
+      return {
+        _src:'inat',
+        id:'i'+o.id,
+        date:o.observed_on||'?',
+        number:1,
+        point:{type:'Point',coordinates:[lng,lat]},
+        species_detail:{
+          id:'i'+(o.taxon?.id||o.id),
+          name:naam,
+          scientific_name:latin
+        }
+      };
+    });
+  S.bronnen.inat={waarnemingen:results.length,soorten:new Set(results.map(o=>o.species_detail?.id)).size,fout:false};
+  return results;
+}
+
+async function fetchEBirdData(){
+  S.bronnen.ebird = null;
+  // eBird recent observations binnen radius
+  // max dist = 50km, back = aantal dagen (max 30)
+  const dist = Math.min(Math.round(S.radius), 50);
+  const back = Math.min(S.days, 30);
+  const url = new URL('https://api.ebird.org/v2/data/obs/geo/recent');
+  url.searchParams.set('lat',      S.lat);
+  url.searchParams.set('lng',      S.lng);
+  url.searchParams.set('dist',     dist);
+  url.searchParams.set('back',     back);
+  url.searchParams.set('cat',      'species');   // alleen echte soorten, geen hybriden
+  url.searchParams.set('maxResults','200');
+
+  const resp = await fetch(url.toString(), {
+    headers: { 'X-eBirdApiToken': EBIRD_KEY }
+  });
+  if(!resp.ok){ S.bronnen.ebird={fout:true}; throw new Error(`eBird HTTP ${resp.status}`); }
+
+  const data = await resp.json();
+
+  const results = (data || []).map(o => {
+    const latin = o.sciName || '';
+    const naam  = getNLNaam(latin, o.comName);
+    return {
+      _src:  'ebird',
+      id:    'e' + o.subId + o.speciesCode,
+      date:  o.obsDt ? o.obsDt.slice(0,10) : '?',
+      number: o.howMany || 1,
+      point: {
+        type: 'Point',
+        coordinates: [o.lng, o.lat]
+      },
+      species_detail: {
+        id:              'e' + o.speciesCode,
+        name:            naam,
+        scientific_name: latin
+      }
+    };
+  });
+
+  S.bronnen.ebird = {
+    waarnemingen: results.length,
+    soorten: new Set(results.map(o => o.species_detail?.id)).size,
+    fout: false
+  };
+  return results;
+}
+
+async function refreshToken(){
+  const r=localStorage.getItem('vr_refresh');if(!r)return false;
+  try{
+    const body=new URLSearchParams({client_id:'obs_app',grant_type:'refresh_token',refresh_token:r});
+    const resp=await fetch('https://waarneming.nl/api/v1/oauth2/token/',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
+    const data=await resp.json();
+    if(data.access_token){S.token=data.access_token;localStorage.setItem('vr_token',S.token);if(data.refresh_token)localStorage.setItem('vr_refresh',data.refresh_token);return true}
+  }catch(e){}
+  return false;
+}
+
+// ── RENDER
+function renderOnlyMarkers(){
+  // Alleen markers hertekenen (na soort-selectie), soortenpillen blijven intact
+  birdMarkers.clearLayers();
+  const byPos={};
+  S.observations.forEach(o=>{
+    const c=o.point?.coordinates;if(!c)return;
+    const key=`${parseFloat(c[1]).toFixed(4)},${parseFloat(c[0]).toFixed(4)}`;
+    if(!byPos[key])byPos[key]=[];byPos[key].push(o);
+  });
+  Object.entries(byPos).forEach(([key,obs])=>{
+    const[lat,lng]=key.split(',').map(Number);
+    const isSelected=S.selectedSpecies&&obs.some(o=>(o.species_detail?.name||'Onbekend')===S.selectedSpecies);
+    const marker=L.marker([lat,lng],{icon:birdIcon(obs[0].number||1,isSelected),zIndexOffset:isSelected?1000:0});
+    let html='';
+    obs.slice(0,4).forEach((o,i)=>{
+      const naam=o.species_detail?.name||'Onbekend';
+      const latin=o.species_detail?.scientific_name||'';
+      const datum=o.date||'?';
+      const n=o.number>1?`${o.number}×`:'';
+      if(i>0)html+='<hr class="popup-sep">';
+      html+=`<div class="popup-soort">${naam}</div>${latin?`<div class="popup-latin">${latin}</div>`:''}<div class="popup-datum">📅 ${datum}</div>${n?`<div class="popup-aantal">${n}</div>`:''}`;
+    });
+    if(obs.length>4)html+=`<hr class="popup-sep"><div class="popup-latin">+${obs.length-4} meer hier</div>`;
+    marker.bindPopup(html,{maxWidth:230});
+    birdMarkers.addLayer(marker);
+  });
+}
+
+function render(){
+  birdMarkers.clearLayers();
+  const byPos={};
+  S.observations.forEach(o=>{
+    const c=o.point?.coordinates;if(!c)return;
+    const key=`${parseFloat(c[1]).toFixed(4)},${parseFloat(c[0]).toFixed(4)}`;
+    if(!byPos[key])byPos[key]=[];byPos[key].push(o);
+  });
+  Object.entries(byPos).forEach(([key,obs])=>{
+    const[lat,lng]=key.split(',').map(Number);
+    const isSelected=S.selectedSpecies&&obs.some(o=>(o.species_detail?.name||'Onbekend')===S.selectedSpecies);
+    const marker=L.marker([lat,lng],{icon:birdIcon(obs[0].number||1, isSelected),zIndexOffset:isSelected?1000:0});
+    let html='';
+    obs.slice(0,4).forEach((o,i)=>{
+      const naam=o.species_detail?.name||'Onbekend';
+      const latin=o.species_detail?.scientific_name||'';
+      const datum=o.date||'?';
+      const n=o.number>1?`${o.number}×`:'';
+      if(i>0)html+='<hr class="popup-sep">';
+      html+=`<div class="popup-soort">${naam}</div>${latin?`<div class="popup-latin">${latin}</div>`:''}<div class="popup-datum">📅 ${datum}</div>${n?`<div class="popup-aantal">${n}</div>`:''}`;
+    });
+    if(obs.length>4)html+=`<hr class="popup-sep"><div class="popup-latin">+${obs.length-4} meer hier</div>`;
+    marker.bindPopup(html,{maxWidth:230});
+    birdMarkers.addLayer(marker);
+  });
+
+  // Soorten lijst
+  const counts={};
+  S.observations.forEach(o=>{const n=o.species_detail?.name||'Onbekend';counts[n]=(counts[n]||0)+(o.number||1)});
+  const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const container=document.getElementById('species-scroll');
+  container.innerHTML=sorted.length
+    ?sorted.map(([naam,n])=>`<div class="species-pill" onclick="zoomTo('${naam.replace(/'/g,"\\'")}')">${naam}<span class="pill-count">${n}</span></div>`).join('')
+    :'<div class="empty-state">Geen vogels gevonden in dit gebied</div>';
+
+  const soorten=new Set(S.observations.map(o=>o.species_detail?.id)).size;
+  document.getElementById('stat-soorten').textContent=soorten;
+  document.getElementById('stat-waarnemingen').textContent=S.observations.length;
+  document.getElementById('stat-km').textContent=S.radius;
+}
+
+function zoomTo(naam){
+  // Deselect als zelfde soort opnieuw getikt
+  if(S.selectedSpecies===naam){
+    S.selectedSpecies=null;
+    document.querySelectorAll('.species-pill').forEach(p=>p.classList.remove('highlight'));
+    renderOnlyMarkers();
+    return;
+  }
+  S.selectedSpecies=naam;
+  const o=S.observations.find(o=>(o.species_detail?.name||'Onbekend')===naam);
+  if(!o?.point?.coordinates)return;
+  const[lng,lat]=o.point.coordinates;
+  map.flyTo([lat,lng],14,{duration:1.2});
+  document.querySelectorAll('.species-pill').forEach(p=>p.classList.toggle('highlight',p.textContent.trim().startsWith(naam)));
+  renderOnlyMarkers(); // Herrender met blauwe stippen voor geselecteerde soort
+}
+
+// ── CONTROLS
+function onRadiusChange(val){
+  S.radius=parseInt(val);
+  document.getElementById('radius-val').textContent=`${val} km`;
+  document.getElementById('stat-km').textContent=val;
+  if(radiusCircle)radiusCircle.setRadius(S.radius*1000);
+}
+function refreshData(){if(S.lat)fetchBirds();else toast('Wacht op GPS…')}
+
+// ── HELPERS
+function dist(lat1,lng1,lat2,lng2){
+  const R=6371,dLat=rad(lat2-lat1),dLng=rad(lng2-lng1);
+  const a=Math.sin(dLat/2)**2+Math.cos(rad(lat1))*Math.cos(rad(lat2))*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function rad(d){return d*Math.PI/180}
+function kmToDeg(km){return km/111}
+function setStatus(label,state){document.getElementById('status-label').textContent=label;document.getElementById('status-dot').className='status-dot '+(state||'')}
+function setBusy(b){document.getElementById('btn-refresh').disabled=b;document.getElementById('refresh-icon').textContent=b?'⟳':'↻'}
+function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),3000)}
+
+function toggleInfo(){
+  const p=document.getElementById('info-popup');
+  const isOpen=p.style.display!=='none';
+  p.style.display=isOpen?'none':'block';
+  if(!isOpen) updateInfoPopup();
+}
+
+function updateInfoPopup(){
+  const el=document.getElementById('info-content');
+  const ts=document.getElementById('info-timestamp');
+  const b=S.bronnen;
+
+  if(!S.lastFetch){
+    el.innerHTML='<div style="color:var(--muted);font-size:.8rem">Nog geen data geladen…</div>';
+    return;
+  }
+
+  let html='';
+  const bronLijst=[
+    {key:'gbif', label:'GBIF', url:'https://gbif.org', kleur:'var(--accent)'},
+    {key:'inat', label:'iNaturalist', url:'https://inaturalist.org', kleur:'#74ac00'},
+    {key:'ebird', label:'eBird', url:'https://ebird.org', kleur:'#c8802a'},
+    {key:'waarneming', label:'Waarneming.nl', url:'https://waarneming.nl', kleur:'#2a7fc8'}
+  ];
+
+  bronLijst.forEach(b2=>{
+    const info=b[b2.key];
+    if(!info) return; // bron niet bevraagd of geen resultaat
+    const soorten=info.soorten||0;
+    const waarn=info.waarnemingen||0;
+    const status=info.fout?'❌ Fout bij laden':waarn===0?'Geen waarnemingen':'✓';
+    html+=`<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-family:var(--font-mono);font-size:.75rem;color:${b2.kleur};font-weight:700">${b2.label}</span>
+        <span style="font-size:.68rem;color:var(--muted)">${status}</span>
+      </div>
+      ${!info.fout&&waarn>0?`<div style="font-size:.78rem;color:var(--text)">${waarn} waarnemingen &nbsp;·&nbsp; <span style="color:var(--accent2)">${soorten} soorten</span></div>`:''}
+    </div>`;
+  });
+
+  // Totaal
+  const totWaarn=S.observations.length;
+  const totSoorten=new Set(S.observations.map(o=>o.species_detail?.id)).size;
+  html+=`<div style="font-family:var(--font-mono);font-size:.78rem;color:var(--accent2)">
+    Totaal: ${totWaarn} waarnemingen · ${totSoorten} soorten
+  </div>`;
+
+  el.innerHTML=html||'<div style="color:var(--muted);font-size:.8rem">Geen brondata beschikbaar</div>';
+  ts.textContent=S.lastFetch?new Date(S.lastFetch).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'—';
+}
+
+// ══ REGISTRATIE ══════════════════════════════════════════════════════════════
+const REG = {
+  lat: null,
+  lng: null,
+  aantal: 1,
+  taxonId: null,
+  soortNaam: '',
+  latinNaam: '',
+  fotoFile: null,
+  locatieModus: false
+};
+
+function toggleRegistreer(){
+  const paneel = document.getElementById('reg-paneel');
+  const isOpen = paneel.style.display !== 'none';
+  if(isOpen){
+    sluitRegistreer();
+  } else {
+    paneel.style.display = 'block';
+    document.getElementById('btn-registreer').classList.add('manual-active');
+    // Gebruik huidige GPS als startlocatie
+    if(S.lat){
+      REG.lat = S.lat;
+      REG.lng = S.lng;
+      document.getElementById('reg-loc-status').textContent =
+        `📍 ${S.lat.toFixed(5)}, ${S.lng.toFixed(5)} (GPS) — tik kaart voor precisie`;
+    }
+    // Activeer kaart-klik voor locatie
+    activeerLocatieModus();
+  }
+}
+
+function sluitRegistreer(){
+  document.getElementById('reg-paneel').style.display = 'none';
+  document.getElementById('btn-registreer').classList.remove('manual-active');
+  deactiveerLocatieModus();
+}
+
+function herKiesLocatie(){
+  // Opnieuw locatie kiezen — paneel inklapppen
+  activeerLocatieModus();
+  document.getElementById('reg-loc-edit').textContent = '';
+}
+
+function activeerLocatieModus(){
+  REG.locatieModus = true;
+  map.on('click', onRegKaartKlik);
+  map.getContainer().style.cursor = 'crosshair';
+  // Paneel inklappen tot smalle balk zodat kaart zichtbaar is
+  const paneel = document.getElementById('reg-paneel');
+  paneel.dataset.volledig = 'false';
+  paneel.style.transform = 'translateY(calc(100% - 52px))';
+  document.getElementById('reg-minibalk').style.display = 'flex';
+}
+
+function deactiveerLocatieModus(){
+  REG.locatieModus = false;
+  map.off('click', onRegKaartKlik);
+  if(!S.manualMode) map.getContainer().style.cursor = '';
+  // Paneel weer volledig tonen
+  const paneel = document.getElementById('reg-paneel');
+  paneel.style.transform = 'translateY(0)';
+  paneel.dataset.volledig = 'true';
+  document.getElementById('reg-minibalk').style.display = 'none';
+}
+
+let regLocMarker = null;
+function onRegKaartKlik(e){
+  // Voorkom conflict met normale kaart-klik
+  if(!REG.locatieModus) return;
+  REG.lat = e.latlng.lat;
+  REG.lng = e.latlng.lng;
+
+  // Marker op kaart
+  if(regLocMarker) map.removeLayer(regLocMarker);
+  regLocMarker = L.marker([REG.lat, REG.lng], {
+    icon: L.divIcon({
+      className:'',
+      html:`<div style="width:14px;height:14px;background:#4da6ff;border:2px solid #0c1008;border-radius:50%;box-shadow:0 0 8px #4da6ff"></div>`,
+      iconAnchor:[7,7]
+    })
+  }).addTo(map);
+
+  document.getElementById('reg-loc-status').textContent =
+    `📍 ${REG.lat.toFixed(5)}, ${REG.lng.toFixed(5)}`;
+  document.getElementById('reg-loc-edit').textContent = '↺ wijzigen';
+
+  // Paneel weer uitklappen na locatiekeuze
+  deactiveerLocatieModus();
+  controleerVerstuurKnop();
+}
+
+// Soort zoeken via iNaturalist taxa API
+let zoekTimer = null;
+async function zoekSoort(q){
+  REG.taxonId = null;
+  REG.soortNaam = '';
+  REG.latinNaam = '';
+  document.getElementById('reg-soort-taxon').value = '';
+  controleerVerstuurKnop();
+
+  clearTimeout(zoekTimer);
+  if(q.length < 2){
+    document.getElementById('reg-suggesties').style.display = 'none';
+    return;
+  }
+
+  zoekTimer = setTimeout(async () => {
+    try{
+      const url = new URL('https://api.inaturalist.org/v1/taxa');
+      url.searchParams.set('q', q);
+      url.searchParams.set('taxon_id', '3'); // Aves
+      url.searchParams.set('per_page', '8');
+      url.searchParams.set('locale', 'nl');
+      const resp = await fetch(url.toString());
+      const data = await resp.json();
+      toonSuggesties(data.results || []);
+    } catch(e){}
+  }, 350);
+}
+
+function toonSuggesties(taxa){
+  const el = document.getElementById('reg-suggesties');
+  if(!taxa.length){ el.style.display='none'; return; }
+
+  el.innerHTML = taxa.map(t => {
+    const nl = getNLNaam(t.name, t.preferred_common_name);
+    const latin = t.name || '';
+    return `<div onclick="kiesSoort(${t.id},'${nl.replace(/'/g,"\'")}','${latin.replace(/'/g,"\'")}','${(t.preferred_common_name||'').replace(/'/g,"\'")}'); " style="padding:9px 13px;cursor:pointer;border-bottom:1px solid var(--border);font-size:.85rem;color:var(--text)" onmouseover="this.style.background='var(--faint)'" onmouseout="this.style.background=''">
+      <span style="color:var(--accent2)">${nl}</span>
+      <span style="font-size:.68rem;color:var(--muted);margin-left:6px;font-style:italic">${latin}</span>
+    </div>`;
+  }).join('');
+  el.style.display = 'block';
+}
+
+function kiesSoort(id, naam, latin, engNaam){
+  REG.taxonId = id;
+  REG.soortNaam = naam;
+  REG.latinNaam = latin;
+  document.getElementById('reg-soort').value = naam;
+  document.getElementById('reg-soort-taxon').value = id;
+  document.getElementById('reg-soort-latin').value = latin;
+  document.getElementById('reg-suggesties').style.display = 'none';
+  controleerVerstuurKnop();
+}
+
+function aantalAanpassen(delta){
+  REG.aantal = Math.max(1, (REG.aantal || 1) + delta);
+  document.getElementById('reg-aantal-val').textContent = REG.aantal;
+}
+
+function fotoGekozen(input){
+  const file = input.files[0];
+  if(!file) return;
+  REG.fotoFile = file;
+  document.getElementById('reg-foto-naam').textContent = file.name;
+  const preview = document.getElementById('reg-foto-preview');
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+}
+
+function controleerVerstuurKnop(){
+  const ok = REG.lat && REG.taxonId;
+  const btn = document.getElementById('btn-verstuur');
+  btn.disabled = !ok;
+  btn.style.opacity = ok ? '1' : '.4';
+}
+
+function verstuurNaariNat(){
+  if(!REG.lat || !REG.taxonId) return;
+
+  const nu = new Date();
+  const datum = nu.toISOString().slice(0,10);
+  const tijdstip = nu.toTimeString().slice(0,5);
+
+  // iNaturalist new observation URL met vooringevulde velden
+  const url = new URL('https://www.inaturalist.org/observations/new');
+  url.searchParams.set('taxon_id',    REG.taxonId);
+  url.searchParams.set('taxon_name',  REG.latinNaam);
+  url.searchParams.set('latitude',    REG.lat.toFixed(6));
+  url.searchParams.set('longitude',   REG.lng.toFixed(6));
+  url.searchParams.set('observed_on', datum);
+  url.searchParams.set('time_observed_at', tijdstip);
+  if(REG.aantal > 1) url.searchParams.set('description', `Aantal: ${REG.aantal}`);
+
+  // Android deep link: intent:// schema opent de app direct
+  // iOS gebruikt inaturalist:// schema
+  // Fallback naar website als app niet aanwezig
+  const webUrl = url.toString();
+
+  const isAndroid = /android/i.test(navigator.userAgent);
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+  if(isAndroid){
+    // Android App Links: gewone https link naar inaturalist.org
+    // Android onderschept deze automatisch en opent de app als die geïnstalleerd is
+    // Dit werkt in zowel Chrome als Samsung Browser
+    window.location.href = webUrl;
+  } else if(isIOS){
+    // iOS universal link
+    const appUrl = webUrl.replace('https://www.inaturalist.org', 'inaturalist://');
+    window.location.href = appUrl;
+    setTimeout(() => { window.open(webUrl, '_blank'); }, 1500);
+  } else {
+    // Desktop: gewoon browser
+    window.open(webUrl, '_blank');
+  }
+
+  toast(`iNaturalist geopend voor ${REG.soortNaam}`);
+
+  // Paneel sluiten en reset
+  setTimeout(() => {
+    sluitRegistreer();
+    REG.taxonId = null; REG.soortNaam = ''; REG.latinNaam = '';
+    REG.fotoFile = null; REG.aantal = 1;
+    document.getElementById('reg-soort').value = '';
+    document.getElementById('reg-aantal-val').textContent = '1';
+    document.getElementById('reg-foto-naam').textContent = 'Geen foto';
+    document.getElementById('reg-foto-preview').style.display = 'none';
+    if(regLocMarker){ map.removeLayer(regLocMarker); regLocMarker = null; }
+  }, 800);
+}
+
+function toggleAutoscan(){
+  S.autoscan = !S.autoscan;
+  const btn = document.getElementById('btn-autoscan');
+  const icon = document.getElementById('autoscan-icon');
+  if(S.autoscan){
+    btn.classList.add('actief');
+    icon.textContent = '⊙';
+    toast('Autoscan aan — scan bij elke km verplaatsing');
+  } else {
+    btn.classList.remove('actief');
+    icon.textContent = '⊙';
+    toast('Autoscan uit');
+  }
+}
+
+setInterval(()=>{if(S.lat&&!S.manualMode)fetchBirds()},5*60*1000);
+</script>
+</body>
+</html>
